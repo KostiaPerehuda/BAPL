@@ -1,0 +1,32 @@
+Activity 3 - Stack Machines
+
+------------------------------------------------------------------------------------------------------------------------
+
+a) Manually execute the following stack-machine program:
+
+Program:
+1. push 4
+2. push 2
+3. push 24
+4. push 21
+5. sub
+6. mult
+7. add
+
+Execution:
+1. PC -> "push 4",          stack -> []
+2. PC -> "push 2",          stack -> [4]
+3. PC -> "push 24",         stack -> [4, 2]
+4. PC -> "push 21",         stack -> [4, 2, 24]
+5. PC -> "sub",             stack -> [4, 2, 24, 21]
+6. PC -> "mult",            stack -> [4, 2, 3]
+7. PC -> "add",             stack -> [4, 6]
+8. PC -> <end of program>,  stack -> [10]
+
+Result: 10
+
+------------------------------------------------------------------------------------------------------------------------
+
+b) What arithmetic expression would generate that previous program?
+
+Answer: 4 + 2 * (24 - 21)
