@@ -97,30 +97,38 @@ end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
 
-local function run(code, stack)
+local function log_executed_instruction(instruction, pc, stack_top)
+    if instruction == "push" then instruction = instruction.." "..stack_top end
+    print("Executed '"..instruction.."'.\nPC = '"..pc.."'.\tStack Top = '"..stack_top.."'.")
+end
+
+local function run(code, stack, trace_enabled)
     local pc = 1
     local top = 0
     while pc <= #code do
-        if code[pc] == "push" then
+        local current_instruction = code[pc]
+        if current_instruction == "push" then
             pc = pc + 1
             top = top + 1
             stack[top] = code[pc]
-        elseif code[pc] == "add" then
+        elseif current_instruction == "add" then
             stack[top - 1] = stack[top - 1] + stack[top]
             top = top - 1
-        elseif code[pc] == "sub" then
+        elseif current_instruction == "sub" then
             stack[top - 1] = stack[top - 1] - stack[top]
             top = top - 1
-        elseif code[pc] == "mul" then
+        elseif current_instruction == "mul" then
             stack[top - 1] = stack[top - 1] * stack[top]
             top = top - 1
-        elseif code[pc] == "div" then
+        elseif current_instruction == "div" then
             stack[top - 1] = stack[top - 1] / stack[top]
             top = top - 1
         else
-            error("unknown instruction: '" .. code[pc] .. "'")
+            error("unknown instruction: '" .. current_instruction .. "'")
         end
         pc = pc + 1
+
+        if trace_enabled then log_executed_instruction(current_instruction, pc, stack[top]) end
     end
 end
 
@@ -135,6 +143,6 @@ local code = compile(ast)
 print("Compiled Code:", pt(code), "\n")
 
 local stack = {}
-run(code, stack)
+run(code, stack, true)
 
 print("Execution Result:", stack[1])
