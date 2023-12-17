@@ -43,9 +43,13 @@ local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_
 
 local number = (int_number + hex_number) * space
 ---------------------------- Arithmetic Expressions ----------------------------
-local additive_operator = lpeg.C(lpeg.S("+-")) * space
+local multiplicative_operator = lpeg.C(lpeg.S("*/")) * space
+local additive_operator       = lpeg.C(lpeg.S("+-")) * space
 
-local sum = lpeg.Ct(number * (additive_operator * number)^0) / fold_left_into_binop_tree
+local term = lpeg.Ct(number * (multiplicative_operator * number)^0) / fold_left_into_binop_tree
+local sum  = lpeg.Ct( term  * (   additive_operator    *  term )^0) / fold_left_into_binop_tree
+
+local arithmetic_expression = sum
 --------------------------------------------------------------------------------
 
 local grammar = space * sum * -1
@@ -63,7 +67,14 @@ local function add_opcode(state, opcode)
     code[#code + 1] = opcode
 end
 
-local opcode_from_operator = {["+"] = "add", ["-"] = "sub"}
+local opcode_from_operator = {
+    ["+"] = "add", ["-"] = "sub",
+    ["*"] = "mul", ["/"] = "div",
+}
+
+local function get_opcode_from_operator(operator)
+    return opcode_from_operator[operator] or error("invalid tree")
+end
 
 local function generate_code_from_expression(state, expression)
     if expression.tag == "number" then
@@ -72,7 +83,7 @@ local function generate_code_from_expression(state, expression)
     elseif expression.tag == "binop" then
         generate_code_from_expression(state, expression.left_operand)
         generate_code_from_expression(state, expression.right_operand)
-        add_opcode(state, opcode_from_operator[expression.operator])
+        add_opcode(state, get_opcode_from_operator(expression.operator))
     else
         error("invalid tree")
     end
@@ -86,7 +97,7 @@ end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
 
-local function run (code, stack)
+local function run(code, stack)
     local pc = 1
     local top = 0
     while pc <= #code do
@@ -100,8 +111,14 @@ local function run (code, stack)
         elseif code[pc] == "sub" then
             stack[top - 1] = stack[top - 1] - stack[top]
             top = top - 1
+        elseif code[pc] == "mul" then
+            stack[top - 1] = stack[top - 1] * stack[top]
+            top = top - 1
+        elseif code[pc] == "div" then
+            stack[top - 1] = stack[top - 1] / stack[top]
+            top = top - 1
         else
-            error("unknown instruction")
+            error("unknown instruction: '" .. code[pc] .. "'")
         end
         pc = pc + 1
     end
