@@ -1,17 +1,35 @@
 local lpeg = require "lpeg"
 local pt = require "pt".pt
 
--------------------------------------------------------- Grammar -------------------------------------------------------
+------------------------------------------------------- Grammar --------------------------------------------------------
 
 local function to_number_node(num, base)
     return {tag = "number", val = tonumber(num, base)}
 end
 
-local space = lpeg.S(" \t\n")^0
-local number = lpeg.R("09")^1 / to_number_node * space
+local function to_int_number_node(num)
+    return to_number_node(num, 10)
+end
 
+local function to_hex_number_node(num)
+    return to_number_node(num, 16)
+end
 
-local grammar = space * number * -1
+------------------------------------ Space -------------------------------------
+local space_token = lpeg.S(" \t\n")^0
+------------------------------------ Number ------------------------------------
+local int_number_body = lpeg.R("09")^1
+
+local hex_number_body = lpeg.R("09", "af", "AF")^1
+local hex_number_prefix = "0" * lpeg.S("xX")
+
+local int_number = -hex_number_prefix * lpeg.C(int_number_body) / to_int_number_node
+local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_node
+
+local number_token = (int_number + hex_number) * space_token
+--------------------------------------------------------------------------------
+
+local grammar = space_token * number_token * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
@@ -27,7 +45,7 @@ local function compile (ast)
     end
 end
 
------------------------------------------------------- Interpreter -----------------------------------------------------
+----------------------------------------------------- Interpreter ------------------------------------------------------
 
 local function run (code, stack)
     local pc = 1
