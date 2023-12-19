@@ -60,11 +60,20 @@ local exponential_operator    = lpeg.C(lpeg.S("^"))   * space
 local multiplicative_operator = lpeg.C(lpeg.S("*/%")) * space
 local additive_operator       = lpeg.C(lpeg.S("+-"))  * space
 
-local exponent = lpeg.Ct( number  * (  exponential_operator  *  number )^0) / fold_right_into_binop_tree
-local   term   = lpeg.Ct(exponent * (multiplicative_operator * exponent)^0) / fold_left_into_binop_tree
-local   sum    = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree
+local  open_bracket = "(" * space
+local close_bracket = ")" * space
 
-local arithmetic_expression = sum
+local   sum    = lpeg.V"sum"
+local   term   = lpeg.V"term"
+local exponent = lpeg.V"exponent"
+local   atom   = lpeg.V"atom"
+
+local arithmetic_expression = lpeg.P{"sum",
+      sum    = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
+      term   = lpeg.Ct(exponent * (multiplicative_operator * exponent)^0) / fold_left_into_binop_tree,
+    exponent = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
+      atom   = (open_bracket * sum * close_bracket) + number,
+}
 --------------------------------------------------------------------------------
 
 local grammar = space * arithmetic_expression * -1
