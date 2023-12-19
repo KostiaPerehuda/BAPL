@@ -3,12 +3,12 @@ local pt = require "pt".pt
 
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
-local function to_number_node(num, base)
-    return { tag = "number", value = tonumber(num, base) }
+local function to_number_node(...)
+    return { tag = "number", value = tonumber(...) }
 end
 
-local function to_int_number_node(num)
-    return to_number_node(num, 10)
+local function to_dec_number_node(num)
+    return to_number_node(num)
 end
 
 local function to_hex_number_node(num)
@@ -50,15 +50,18 @@ end
 ------------------------------------ Space -------------------------------------
 local space = lpeg.S(" \t\n")^0
 ------------------------------------ Number ------------------------------------
-local int_number_body = lpeg.R("09")^1
+local digit = lpeg.R("09")
+
+local e_notation_suffix = (lpeg.S("eE") * lpeg.P"-"^-1 * digit^1)^-1
+local dec_number_body = ((digit^1 * lpeg.P"."^-1 * digit^0) + ("." * digit^1)) * e_notation_suffix
 
 local hex_number_body = lpeg.R("09", "af", "AF")^1
 local hex_number_prefix = "0" * lpeg.S("xX")
 
-local int_number = -hex_number_prefix * lpeg.C(int_number_body) / to_int_number_node
+local dec_number = -hex_number_prefix * lpeg.C(dec_number_body) / to_dec_number_node
 local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_node
 
-local number = (int_number + hex_number) * space
+local number = (dec_number + hex_number) * space
 ---------------------------- Arithmetic Expressions ----------------------------
 local unary_minus_operator    = "-" * space
 
