@@ -4,7 +4,7 @@ local pt = require "pt".pt
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
 local function to_number_node(num, base)
-    return {tag = "number", val = tonumber(num, base)}
+    return {tag = "number", value = tonumber(num, base)}
 end
 
 local function to_int_number_node(num)
@@ -30,6 +30,19 @@ local function fold_left_into_binop_tree(lst)
     return tree
 end
 
+function fold_right_into_binop_tree(lst)
+    local tree = lst[#lst]
+    for i = #lst-1, 2, -2 do
+        tree = {
+            tag = "binop",
+            left_operand = lst[i - 1],
+            operator = lst[i],
+            right_operand = tree,
+        }
+    end
+    return tree
+end
+
 ------------------------------------ Space -------------------------------------
 local space = lpeg.S(" \t\n")^0
 ------------------------------------ Number ------------------------------------
@@ -43,16 +56,18 @@ local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_
 
 local number = (int_number + hex_number) * space
 ---------------------------- Arithmetic Expressions ----------------------------
-local multiplicative_operator = lpeg.C(lpeg.S("*/")) * space
-local additive_operator       = lpeg.C(lpeg.S("+-")) * space
+local exponential_operator    = lpeg.C(lpeg.S("^"))   * space
+local multiplicative_operator = lpeg.C(lpeg.S("*/%")) * space
+local additive_operator       = lpeg.C(lpeg.S("+-"))  * space
 
-local term = lpeg.Ct(number * (multiplicative_operator * number)^0) / fold_left_into_binop_tree
-local sum  = lpeg.Ct( term  * (   additive_operator    *  term )^0) / fold_left_into_binop_tree
+local exponent = lpeg.Ct( number  * (  exponential_operator  *  number )^0) / fold_right_into_binop_tree
+local   term   = lpeg.Ct(exponent * (multiplicative_operator * exponent)^0) / fold_left_into_binop_tree
+local   sum    = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree
 
 local arithmetic_expression = sum
 --------------------------------------------------------------------------------
 
-local grammar = space * sum * -1
+local grammar = space * arithmetic_expression * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
@@ -69,7 +84,8 @@ end
 
 local opcode_from_operator = {
     ["+"] = "add", ["-"] = "sub",
-    ["*"] = "mul", ["/"] = "div",
+    ["*"] = "mul", ["/"] = "div", ["%"] = "mod",
+    ["^"] = "exp"
 }
 
 local function get_opcode_from_operator(operator)
@@ -79,7 +95,7 @@ end
 local function generate_code_from_expression(state, expression)
     if expression.tag == "number" then
         add_opcode(state, "push")
-        add_opcode(state, expression.val)
+        add_opcode(state, expression.value)
     elseif expression.tag == "binop" then
         generate_code_from_expression(state, expression.left_operand)
         generate_code_from_expression(state, expression.right_operand)
@@ -122,6 +138,12 @@ local function run(code, stack, trace_enabled)
             top = top - 1
         elseif current_instruction == "div" then
             stack[top - 1] = stack[top - 1] / stack[top]
+            top = top - 1
+        elseif current_instruction == "mod" then
+            stack[top - 1] = stack[top - 1] % stack[top]
+            top = top - 1
+        elseif current_instruction == "exp" then
+            stack[top - 1] = stack[top - 1] ^ stack[top]
             top = top - 1
         else
             error("unknown instruction: '" .. current_instruction .. "'")
