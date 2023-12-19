@@ -60,26 +60,32 @@ local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_
 
 local number = (int_number + hex_number) * space
 ---------------------------- Arithmetic Expressions ----------------------------
+local unary_minus_operator    = "-" * space
+
 local exponential_operator    = lpeg.C(lpeg.S("^"))   * space
 local multiplicative_operator = lpeg.C(lpeg.S("*/%")) * space
 local additive_operator       = lpeg.C(lpeg.S("+-"))  * space
-local unary_minus_operator    = "-" * space
+
+local comparison_operator = lpeg.C(lpeg.P("==") + "!=" + "<=" + ">=" + "<" +">") * space
 
 local  open_bracket = "(" * space
 local close_bracket = ")" * space
 
+local expression  = lpeg.V"expression"
+local comparison  = lpeg.V"comparison"
 local     sum     = lpeg.V"sum"
 local     term    = lpeg.V"term"
 local   exponent  = lpeg.V"exponent"
 local unary_minus = lpeg.V"unary_minus"
 local     atom    = lpeg.V"atom"
 
-local arithmetic_expression = lpeg.P{"sum",
+local arithmetic_expression = lpeg.P{"expression", expression = comparison,
+    comparison  = lpeg.Ct(   sum      * (  comparison_operator   *     sum     )^0) / fold_left_into_binop_tree,
        sum      = lpeg.Ct(   term     * (   additive_operator    *     term    )^0) / fold_left_into_binop_tree,
        term     = lpeg.Ct(unary_minus * (multiplicative_operator *  unary_minus)^0) / fold_left_into_binop_tree,
     unary_minus = (unary_minus_operator * unary_minus / apply_unary_minus_operator) + exponent,
      exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
-       atom     = (open_bracket * sum * close_bracket) + number,
+       atom     = (open_bracket * expression * close_bracket) + number,
 }
 --------------------------------------------------------------------------------
 
@@ -99,9 +105,10 @@ local function add_opcode(state, opcode)
 end
 
 local opcode_from_operator = {
+    ["=="] = "eq", ["!="] = "neq", ["<="] = "lte", [">="] = "gte", ["<"] = "lt", [">"] = "gt",
     ["+"] = "add", ["-"] = "sub",
     ["*"] = "mul", ["/"] = "div", ["%"] = "mod",
-    ["^"] = "exp"
+    ["^"] = "exp",
 }
 
 local function get_opcode_from_operator(operator)
@@ -146,6 +153,24 @@ local function run(code, stack, trace_enabled)
             pc = pc + 1
             top = top + 1
             stack[top] = code[pc]
+        elseif current_instruction == "eq" then
+            stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0
+            top = top - 1
+        elseif current_instruction == "neq" then
+            stack[top - 1] = (stack[top - 1] ~= stack[top]) and 1 or 0
+            top = top - 1
+        elseif current_instruction == "lte" then
+            stack[top - 1] = (stack[top - 1] <= stack[top]) and 1 or 0
+            top = top - 1
+        elseif current_instruction == "gte" then
+            stack[top - 1] = (stack[top - 1] >= stack[top]) and 1 or 0
+            top = top - 1
+        elseif current_instruction == "lt" then
+            stack[top - 1] = (stack[top - 1] < stack[top]) and 1 or 0
+            top = top - 1
+        elseif current_instruction == "gt" then
+            stack[top - 1] = (stack[top - 1] > stack[top]) and 1 or 0
+            top = top - 1
         elseif current_instruction == "add" then
             stack[top - 1] = stack[top - 1] + stack[top]
             top = top - 1
