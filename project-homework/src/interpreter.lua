@@ -4,7 +4,7 @@ local pt = require "pt".pt
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
 local function to_number_node(num, base)
-    return {tag = "number", value = tonumber(num, base)}
+    return { tag = "number", value = tonumber(num, base) }
 end
 
 local function to_int_number_node(num)
@@ -30,7 +30,7 @@ local function fold_left_into_binop_tree(lst)
     return tree
 end
 
-function fold_right_into_binop_tree(lst)
+local function fold_right_into_binop_tree(lst)
     local tree = lst[#lst]
     for i = #lst-1, 2, -2 do
         tree = {
@@ -41,6 +41,10 @@ function fold_right_into_binop_tree(lst)
         }
     end
     return tree
+end
+
+local function apply_unary_minus_operator(expression)
+    return { tag = "unary_minus", operand = expression }
 end
 
 ------------------------------------ Space -------------------------------------
@@ -59,20 +63,23 @@ local number = (int_number + hex_number) * space
 local exponential_operator    = lpeg.C(lpeg.S("^"))   * space
 local multiplicative_operator = lpeg.C(lpeg.S("*/%")) * space
 local additive_operator       = lpeg.C(lpeg.S("+-"))  * space
+local unary_minus_operator    = "-" * space
 
 local  open_bracket = "(" * space
 local close_bracket = ")" * space
 
-local   sum    = lpeg.V"sum"
-local   term   = lpeg.V"term"
-local exponent = lpeg.V"exponent"
-local   atom   = lpeg.V"atom"
+local     sum     = lpeg.V"sum"
+local     term    = lpeg.V"term"
+local   exponent  = lpeg.V"exponent"
+local unary_minus = lpeg.V"unary_minus"
+local     atom    = lpeg.V"atom"
 
 local arithmetic_expression = lpeg.P{"sum",
-      sum    = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
-      term   = lpeg.Ct(exponent * (multiplicative_operator * exponent)^0) / fold_left_into_binop_tree,
-    exponent = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
-      atom   = (open_bracket * sum * close_bracket) + number,
+       sum      = lpeg.Ct(   term     * (   additive_operator    *     term    )^0) / fold_left_into_binop_tree,
+       term     = lpeg.Ct(unary_minus * (multiplicative_operator *  unary_minus)^0) / fold_left_into_binop_tree,
+    unary_minus = (unary_minus_operator * unary_minus / apply_unary_minus_operator) + exponent,
+     exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
+       atom     = (open_bracket * sum * close_bracket) + number,
 }
 --------------------------------------------------------------------------------
 
@@ -109,6 +116,9 @@ local function generate_code_from_expression(state, expression)
         generate_code_from_expression(state, expression.left_operand)
         generate_code_from_expression(state, expression.right_operand)
         add_opcode(state, get_opcode_from_operator(expression.operator))
+    elseif expression.tag == "unary_minus" then
+        generate_code_from_expression(state, expression.operand)
+        add_opcode(state, "negate")
     else
         error("invalid tree")
     end
@@ -154,6 +164,8 @@ local function run(code, stack, trace_enabled)
         elseif current_instruction == "exp" then
             stack[top - 1] = stack[top - 1] ^ stack[top]
             top = top - 1
+        elseif current_instruction == "negate" then
+            stack[top] = -stack[top]
         else
             error("unknown instruction: '" .. current_instruction .. "'")
         end

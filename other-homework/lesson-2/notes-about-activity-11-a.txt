@@ -1,0 +1,11 @@
+Activity 11a - Adding More Operators
+
+------------------------------------------------------------------------------------------------------------------------
+
+a) Add a unary minus operator (negation) to the language.
+
+This is done as a commit to the project-homework interpreter.
+
+Notes:
+With current implmentation the operator has priority higher than
+multiplicative binary operators but lower that the exponent operator.
