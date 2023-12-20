@@ -71,7 +71,10 @@ local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_
 
 local number = (dec_number + hex_number) * space
 ---------------------------------- Identifier ----------------------------------
-local identifier = lpeg.C(alpha_char * alpha_numeric_char^0) * space
+local alpha_char_or_underscore = alpha_char + "_"
+local alpha_numeric_char_or_underscore = alpha_numeric_char + "_"
+
+local identifier = lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * space
 ----------------------------------- Variable -----------------------------------
 local variable = identifier / to_variable_node
 ---------------------------- Arithmetic Expressions ----------------------------
@@ -174,6 +177,8 @@ local function run(code, memory, stack, trace_enabled)
         elseif code[pc] == "load" then
             pc = pc + 1
             top = top + 1
+            -- TODO: might be useful to throw undefined variable exception here
+            --       in case the variable is not present in the memory
             stack[top] = memory[code[pc]]
         elseif current_instruction == "eq" then
             stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0

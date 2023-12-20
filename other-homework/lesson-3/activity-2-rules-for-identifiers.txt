@@ -1,0 +1,16 @@
+Activity 2 - Rules For Identifiers
+
+------------------------------------------------------------------------------------------------------------------------
+
+a) Add underscores to the list of valid characters in identifiers.
+
+This is done as a commit to the project-homework interpreter.
+
+b) Consider what other characters could be useful in that set.
+
+I can't think of any immediately useful characters.
+Maybe adding alphabetic characters from other dialects might be useful,
+for example letters from German or Cyrillic alphabets,
+but I'm not sure that this will be of significant benefit for the users.
+It is important to note that we should not try to add any special characters
+like dashes to this set, as they will be confused with operators by the parser.
