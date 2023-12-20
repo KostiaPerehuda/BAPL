@@ -44,28 +44,20 @@ local alpha_char = lpeg.R("AZ", "az")
 local alpha_numeric_char = alpha_char + digit
 
 ------------------------------------ Number ------------------------------------
-local function to_number_node(...)
-    return { tag = "number", number_value = tonumber(...) }
-end
-
-local function to_dec_number_node(num)
-    return to_number_node(num)
-end
-
-local function to_hex_number_node(num)
-    return to_number_node(num, 16)
+local function to_number_node(number)
+    return { tag = "number", number_value = tonumber(number) }
 end
 
 local e_notation_suffix = (lpeg.S("eE") * lpeg.P"-"^-1 * digit^1)^-1
 local dec_number_body = ((digit^1 * lpeg.P"."^-1 * digit^0) + ("." * digit^1)) * e_notation_suffix
 
 local hex_number_prefix = "0" * lpeg.S("xX")
-local hex_number_body = hex_digit^1
+local hex_number_body = (hex_digit^1 * lpeg.P"."^-1 * hex_digit^0) + ("." * hex_digit^1)
 
-local dec_number = -hex_number_prefix * lpeg.C(dec_number_body) / to_dec_number_node
-local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_node
+local dec_number = -hex_number_prefix * dec_number_body
+local hex_number =  hex_number_prefix * hex_number_body
 
-local number = (dec_number + hex_number) * space
+local number = lpeg.C(dec_number + hex_number) / to_number_node * space
 
 ---------------------------------- Identifier ----------------------------------
 local alpha_char_or_underscore = alpha_char + "_"
