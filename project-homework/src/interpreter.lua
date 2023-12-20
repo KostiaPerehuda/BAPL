@@ -3,6 +3,47 @@ local pt = require "pt".pt
 
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
+local function to_binop_node(left_operand, operator, right_operand)
+    return {
+        tag = "binop",
+        left_operand = left_operand,
+        operator = operator,
+        right_operand = right_operand,
+    }
+end
+
+-- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
+-- {...{operator = "+", left_operand = {operator = "+", left_operand = n1, right_operand = n2}, right_operand = n3}...}
+local function fold_left_into_binop_tree(list)
+    local tree = list[1]
+    for i = 2, #list, 2 do
+        tree = to_binop_node(tree, list[i], list[i + 1])
+    end
+    return tree
+end
+
+local function fold_right_into_binop_tree(list)
+    local tree = list[#list]
+    for i = #list - 1, 2, -2 do
+        tree = to_binop_node(list[i - 1], list[i], tree)
+    end
+    return tree
+end
+
+local function apply_unary_minus_operator(expression)
+    return { tag = "unary_minus", operand = expression }
+end
+
+-------------------------------- Basic Patterns --------------------------------
+local space = lpeg.S(" \t\n")^0
+
+local digit = lpeg.R("09")
+local hex_digit = lpeg.R("09", "af", "AF")
+
+local alpha_char = lpeg.R("AZ", "az")
+local alpha_numeric_char = alpha_char + digit
+
+------------------------------------ Number ------------------------------------
 local function to_number_node(...)
     return { tag = "number", number_value = tonumber(...) }
 end
@@ -15,55 +56,6 @@ local function to_hex_number_node(num)
     return to_number_node(num, 16)
 end
 
-local function to_variable_node(variable_name)
-    return { tag = "variable", variable_name = variable_name }
-end
-
--- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
--- {...{ operator = "+", left_operand = {operator = "+", left_operand = n1, right_operand = n2}, right_operand = n3}...}
-local function fold_left_into_binop_tree(lst)
-    local tree = lst[1]
-    for i = 2, #lst, 2 do
-        tree = {
-            tag = "binop",
-            left_operand = tree,
-            operator = lst[i],
-            right_operand = lst[i + 1],
-        }
-    end
-    return tree
-end
-
-local function fold_right_into_binop_tree(lst)
-    local tree = lst[#lst]
-    for i = #lst-1, 2, -2 do
-        tree = {
-            tag = "binop",
-            left_operand = lst[i - 1],
-            operator = lst[i],
-            right_operand = tree,
-        }
-    end
-    return tree
-end
-
-local function apply_unary_minus_operator(expression)
-    return { tag = "unary_minus", operand = expression }
-end
-
-local function to_assignment_node(identifier, expression)
-    return { tag = "assignment", assignment_target = identifier, expression = expression }
-end
-
--------------------------------- Basic Patterns --------------------------------
-local space = lpeg.S(" \t\n")^0
-
-local digit = lpeg.R("09")
-local hex_digit = lpeg.R("09", "af", "AF")
-
-local alpha_char = lpeg.R("AZ", "az")
-local alpha_numeric_char = alpha_char + digit
------------------------------------- Number ------------------------------------
 local e_notation_suffix = (lpeg.S("eE") * lpeg.P"-"^-1 * digit^1)^-1
 local dec_number_body = ((digit^1 * lpeg.P"."^-1 * digit^0) + ("." * digit^1)) * e_notation_suffix
 
@@ -74,13 +66,20 @@ local dec_number = -hex_number_prefix * lpeg.C(dec_number_body) / to_dec_number_
 local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_node
 
 local number = (dec_number + hex_number) * space
+
 ---------------------------------- Identifier ----------------------------------
 local alpha_char_or_underscore = alpha_char + "_"
 local alpha_numeric_char_or_underscore = alpha_numeric_char + "_"
 
 local identifier = lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * space
+
 ----------------------------------- Variable -----------------------------------
+local function to_variable_node(variable_name)
+    return { tag = "variable", variable_name = variable_name }
+end
+
 local variable = identifier / to_variable_node
+
 ---------------------------------- Expression ----------------------------------
 local unary_minus_operator    = "-" * space
 
@@ -109,12 +108,43 @@ local expression = lpeg.P{"expression", expression = comparison,
      exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
        atom     = (open_bracket * expression * close_bracket) + number + variable,
 }
+
 ---------------------------------- Assignment ----------------------------------
+local function to_assignment_node(identifier, expression)
+    return { tag = "assignment", assignment_target = identifier, expression = expression }
+end
+
 local assignment_operator = "=" * space
 local assignment = identifier * assignment_operator * expression / to_assignment_node
+
+----------------------------- Sequences and Blocks -----------------------------
+local function to_sequence_node(first_statement, second_statement)
+    if second_statement == nil then return first_statement end
+    return { tag = "sequence", first = first_statement, second = second_statement }
+end
+
+local semicolon = ";" * space
+
+local  open_brace = "{" * space
+local close_brace = "}" * space
+
+local sequence  = lpeg.V"sequence"
+local statement = lpeg.V"statement"
+local block     = lpeg.V"block"
+
+-- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
+--       for the compiler.
+--       The parser just drops the block-start and block-end anchors.
+--       Will most probably be changed in the future when we will implement
+--       local variables and stack frames.
+local statements = lpeg.P{"sequence",
+    sequence  = statement * (semicolon * sequence)^-1 / to_sequence_node,
+    statement = assignment + block,
+    block     = open_brace * sequence * close_brace,
+}
 --------------------------------------------------------------------------------
 
-local grammar = space * assignment * -1
+local grammar = space * statements * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
@@ -164,6 +194,9 @@ local function generate_code_from_statement(state, statement)
         generate_code_from_expression(state, statement.expression)
         add_opcode(state, "store")
         add_opcode(state, statement.assignment_target)
+    elseif statement.tag == "sequence" then
+        generate_code_from_statement(state, statement.first)
+        generate_code_from_statement(state, statement.second)
     else
         error("invalid tree")
     end
