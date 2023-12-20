@@ -4,7 +4,7 @@ local pt = require "pt".pt
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
 local function to_number_node(...)
-    return { tag = "number", value = tonumber(...) }
+    return { tag = "number", number_value = tonumber(...) }
 end
 
 local function to_dec_number_node(num)
@@ -13,6 +13,10 @@ end
 
 local function to_hex_number_node(num)
     return to_number_node(num, 16)
+end
+
+local function to_variable_node(variable_name)
+    return { tag = "variable", variable_name = variable_name }
 end
 
 -- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
@@ -47,21 +51,29 @@ local function apply_unary_minus_operator(expression)
     return { tag = "unary_minus", operand = expression }
 end
 
------------------------------------- Space -------------------------------------
+-------------------------------- Basic Patterns --------------------------------
 local space = lpeg.S(" \t\n")^0
------------------------------------- Number ------------------------------------
-local digit = lpeg.R("09")
 
+local digit = lpeg.R("09")
+local hex_digit = lpeg.R("09", "af", "AF")
+
+local alpha_char = lpeg.R("AZ", "az")
+local alpha_numeric_char = alpha_char + digit
+------------------------------------ Number ------------------------------------
 local e_notation_suffix = (lpeg.S("eE") * lpeg.P"-"^-1 * digit^1)^-1
 local dec_number_body = ((digit^1 * lpeg.P"."^-1 * digit^0) + ("." * digit^1)) * e_notation_suffix
 
-local hex_number_body = lpeg.R("09", "af", "AF")^1
 local hex_number_prefix = "0" * lpeg.S("xX")
+local hex_number_body = hex_digit^1
 
 local dec_number = -hex_number_prefix * lpeg.C(dec_number_body) / to_dec_number_node
 local hex_number =  hex_number_prefix * lpeg.C(hex_number_body) / to_hex_number_node
 
 local number = (dec_number + hex_number) * space
+---------------------------------- Identifier ----------------------------------
+local identifier = lpeg.C(alpha_char * alpha_numeric_char^0) * space
+----------------------------------- Variable -----------------------------------
+local variable = identifier / to_variable_node
 ---------------------------- Arithmetic Expressions ----------------------------
 local unary_minus_operator    = "-" * space
 
@@ -88,7 +100,7 @@ local arithmetic_expression = lpeg.P{"expression", expression = comparison,
        term     = lpeg.Ct(unary_minus * (multiplicative_operator *  unary_minus)^0) / fold_left_into_binop_tree,
     unary_minus = (unary_minus_operator * unary_minus / apply_unary_minus_operator) + exponent,
      exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
-       atom     = (open_bracket * expression * close_bracket) + number,
+       atom     = (open_bracket * expression * close_bracket) + number + variable,
 }
 --------------------------------------------------------------------------------
 
@@ -121,7 +133,10 @@ end
 local function generate_code_from_expression(state, expression)
     if expression.tag == "number" then
         add_opcode(state, "push")
-        add_opcode(state, expression.value)
+        add_opcode(state, expression.number_value)
+    elseif expression.tag == "variable" then
+        add_opcode(state, "load")
+        add_opcode(state, expression.variable_name)
     elseif expression.tag == "binop" then
         generate_code_from_expression(state, expression.left_operand)
         generate_code_from_expression(state, expression.right_operand)
@@ -147,7 +162,7 @@ local function log_executed_instruction(instruction, pc, stack_top)
     print("Executed '"..instruction.."'.\nPC = '"..pc.."'.\tStack Top = '"..stack_top.."'.")
 end
 
-local function run(code, stack, trace_enabled)
+local function run(code, memory, stack, trace_enabled)
     local pc = 1
     local top = 0
     while pc <= #code do
@@ -156,6 +171,10 @@ local function run(code, stack, trace_enabled)
             pc = pc + 1
             top = top + 1
             stack[top] = code[pc]
+        elseif code[pc] == "load" then
+            pc = pc + 1
+            top = top + 1
+            stack[top] = memory[code[pc]]
         elseif current_instruction == "eq" then
             stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0
             top = top - 1
@@ -213,7 +232,8 @@ print("Abstract Syntax Tree:", pt(ast), "\n")
 local code = compile(ast)
 print("Compiled Code:", pt(code), "\n")
 
+local memory = { const1 = 1, const10 = 10 }
 local stack = {}
-run(code, stack, true)
+run(code, memory, stack, true)
 
 print("Execution Result:", stack[1])
