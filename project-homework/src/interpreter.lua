@@ -118,15 +118,30 @@ local assignment_operator = "=" * space
 local assignment = identifier * assignment_operator * expression / to_assignment_node
 
 ----------------------------- Sequences and Blocks -----------------------------
+local function skip_node()
+    return { tag = "skip" }
+end
+
 local function to_sequence_node(first_statement, second_statement)
-    if second_statement == nil then return first_statement end
     return { tag = "sequence", first = first_statement, second = second_statement }
+end
+
+local function fold_right_to_sequence_node(statements)
+    if #statements == 0 then return skip_node() end
+
+    local node = statements[#statements]
+    for i = #statements - 1, 1, -1 do
+        node = to_sequence_node(statements[i], node)
+    end
+    return node
 end
 
 local semicolon = ";" * space
 
 local  open_brace = "{" * space
 local close_brace = "}" * space
+
+local delimiter = semicolon^1
 
 local sequence  = lpeg.V"sequence"
 local statement = lpeg.V"statement"
@@ -138,7 +153,7 @@ local block     = lpeg.V"block"
 --       Will most probably be changed in the future when we will implement
 --       local variables and stack frames.
 local statements = lpeg.P{"sequence",
-    sequence  = statement * (semicolon * sequence)^-1 / to_sequence_node,
+    sequence  = lpeg.Ct((statement * (delimiter * statement)^0 * delimiter^-1)^-1) / fold_right_to_sequence_node,
     statement = assignment + block,
     block     = open_brace * sequence * close_brace,
 }
@@ -197,6 +212,8 @@ local function generate_code_from_statement(state, statement)
     elseif statement.tag == "sequence" then
         generate_code_from_statement(state, statement.first)
         generate_code_from_statement(state, statement.second)
+    elseif statement.tag == "skip" then
+        --skip
     else
         error("invalid tree")
     end

@@ -1,0 +1,52 @@
+Activity 5 - Empty Statement
+
+------------------------------------------------------------------------------------------------------------------------
+
+Change the syntax so that we can write extra semicolons and empty blocks.
+(Conceptually, that corresponds to adding an empty statement to the language)
+
+This is done as a commit to the project-homework interpreter.
+
+Notes:
+1 - The term "extra semicolons" is a little bit ambiguous for me.
+    In the current implementation a semicolon is used as a statement delimiter.
+    I have decided to interpret a statement delimiter as one or more semicolons.
+        So "statement1 ; ; ; statement2" will be treated as sequence_of(statement1, statement2)
+
+2 - Implementation of the grammar as of Activity 4 allowed a trailing semicolon in the blocks:
+        A program "{ statement1; statement2; }" was legal.
+    But it did not allow a trailing semicolon in the sequences:
+        A program "statement1; statement2;" was illegal.
+    I've changed that so that it is now legal, by defining an optional trailing semicolon
+    as being a part of the sequence, not a part of the block.
+
+3 - An Empty Block "{}" could be interpreted as an "empty statement", however:
+    a. It will require a separate capture, and a separate AST node, e.g. a "skip" node.
+        because with current implementation a block is nothing but a syntactic sugar
+        around a sequence, and empty sequences are not allowed.
+
+    b. A better alternative might be to allow an "empty sequence" and capture it as a "skip" node.
+        This has some benefits:
+            1 - simplifies the whole situation with blocks: blocks remain to be blocks,
+                    and an empty block is just a block containing an empty sequence.
+                    And since a block is a statement, an empty block is an empty statement.
+            2 - an empty string becomes a valid program, which just does nothing.
+                    I believe this is better than rejecting an empty string.
+
+        We have to be careful here when allowing for empty sequences in the grammar, as we don't
+        want to pollute our AST with "skip" nodes all over the place.
+    
+        When compiling a "skip" node, we just emit no code.
+    
+    I have decided to proceed with option b.
+    
+    Unfortunately, I had to give up with right-recursive definiton of sequence (which I liked a lot) and
+        instead use table-capture and fold-right for converting a list of statements into a sequence node tree.
+        I could've used fold-left, as it would make absolutely no difference for the compiler, but I chose
+        fold-right to preserve the original behaviour of right-recursive definition.
+
+4 - With the implementation of the current task, an empty program ("   ") is considered to be a valid program,
+        which parses into an empty sequence, and the compiler emits no code for such a program.
+    But programs such as (" ; ") or (" ;;;;;; ") are considered to be invalid, because a semicolon is a
+        statement delimiter in a sequence, so there must be a statement preceding the semicolon, therefore these
+        programs are considered invalid.
