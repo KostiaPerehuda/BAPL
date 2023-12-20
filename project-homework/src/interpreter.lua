@@ -51,6 +51,10 @@ local function apply_unary_minus_operator(expression)
     return { tag = "unary_minus", operand = expression }
 end
 
+local function to_assignment_node(identifier, expression)
+    return { tag = "assignment", assignment_target = identifier, expression = expression }
+end
+
 -------------------------------- Basic Patterns --------------------------------
 local space = lpeg.S(" \t\n")^0
 
@@ -77,7 +81,7 @@ local alpha_numeric_char_or_underscore = alpha_numeric_char + "_"
 local identifier = lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * space
 ----------------------------------- Variable -----------------------------------
 local variable = identifier / to_variable_node
----------------------------- Arithmetic Expressions ----------------------------
+---------------------------------- Expression ----------------------------------
 local unary_minus_operator    = "-" * space
 
 local exponential_operator    = lpeg.C(lpeg.S("^"))   * space
@@ -97,7 +101,7 @@ local   exponent  = lpeg.V"exponent"
 local unary_minus = lpeg.V"unary_minus"
 local     atom    = lpeg.V"atom"
 
-local arithmetic_expression = lpeg.P{"expression", expression = comparison,
+local expression = lpeg.P{"expression", expression = comparison,
     comparison  = lpeg.Ct(   sum      * (  comparison_operator   *     sum     )^0) / fold_left_into_binop_tree,
        sum      = lpeg.Ct(   term     * (   additive_operator    *     term    )^0) / fold_left_into_binop_tree,
        term     = lpeg.Ct(unary_minus * (multiplicative_operator *  unary_minus)^0) / fold_left_into_binop_tree,
@@ -105,9 +109,12 @@ local arithmetic_expression = lpeg.P{"expression", expression = comparison,
      exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
        atom     = (open_bracket * expression * close_bracket) + number + variable,
 }
+---------------------------------- Assignment ----------------------------------
+local assignment_operator = "=" * space
+local assignment = identifier * assignment_operator * expression / to_assignment_node
 --------------------------------------------------------------------------------
 
-local grammar = space * arithmetic_expression * -1
+local grammar = space * assignment * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
@@ -152,17 +159,27 @@ local function generate_code_from_expression(state, expression)
     end
 end
 
+local function generate_code_from_statement(state, statement)
+    if statement.tag == "assignment" then
+        generate_code_from_expression(state, statement.expression)
+        add_opcode(state, "store")
+        add_opcode(state, statement.assignment_target)
+    else
+        error("invalid tree")
+    end
+end
+
 local function compile(ast)
     local state = { code = {} }
-    generate_code_from_expression(state, ast)
+    generate_code_from_statement(state, ast)
     return state.code
 end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
 
 local function log_executed_instruction(instruction, pc, stack_top)
-    if instruction == "push" then instruction = instruction.." "..stack_top end
-    print("Executed '"..instruction.."'.\nPC = '"..pc.."'.\tStack Top = '"..stack_top.."'.")
+    if instruction == "push" then instruction = instruction.." "..tostring(stack_top) end
+    print("Executed '"..instruction.."'.\nPC = '"..pc.."'.\tStack Top = '"..tostring(stack_top).."'.")
 end
 
 local function run(code, memory, stack, trace_enabled)
@@ -180,6 +197,10 @@ local function run(code, memory, stack, trace_enabled)
             -- TODO: might be useful to throw undefined variable exception here
             --       in case the variable is not present in the memory
             stack[top] = memory[code[pc]]
+        elseif code[pc] == "store" then
+            pc = pc + 1
+            memory[code[pc]] = stack[top]
+            top = top - 1
         elseif current_instruction == "eq" then
             stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0
             top = top - 1
@@ -241,4 +262,4 @@ local memory = { const1 = 1, const10 = 10 }
 local stack = {}
 run(code, memory, stack, true)
 
-print("Execution Result:", stack[1])
+print("Execution Result:", memory.result)
