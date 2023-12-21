@@ -109,6 +109,15 @@ end
 local assignment_operator = "=" * space
 local assignment = identifier * assignment_operator * expression / to_assignment_node
 
+------------------------------- Return Statement -------------------------------
+local function to_return_node(expression)
+    return { tag = "return", expression = expression }
+end
+
+local return_keyword = "return" * space
+
+local return_statement = return_keyword * expression / to_return_node
+
 ----------------------------- Sequences and Blocks -----------------------------
 local function skip_node()
     return { tag = "skip" }
@@ -146,7 +155,7 @@ local block     = lpeg.V"block"
 --       local variables and stack frames.
 local statements = lpeg.P{"sequence",
     sequence  = lpeg.Ct((statement * (delimiter * statement)^0 * delimiter^-1)^-1) / fold_right_to_sequence_node,
-    statement = assignment + block,
+    statement = block + assignment + return_statement,
     block     = open_brace * sequence * close_brace,
 }
 --------------------------------------------------------------------------------
@@ -204,6 +213,9 @@ local function generate_code_from_statement(state, statement)
     elseif statement.tag == "sequence" then
         generate_code_from_statement(state, statement.first)
         generate_code_from_statement(state, statement.second)
+    elseif statement.tag == "return" then
+        generate_code_from_expression(state, statement.expression)
+        add_opcode(state, "ret")
     elseif statement.tag == "skip" then
         --skip
     else
@@ -214,22 +226,69 @@ end
 local function compile(ast)
     local state = { code = {} }
     generate_code_from_statement(state, ast)
+    generate_code_from_statement(state, to_return_node(to_number_node(0)))
     return state.code
 end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
 
-local function log_executed_instruction(instruction, pc, stack_top)
-    if instruction == "push" then instruction = instruction.." "..tostring(stack_top) end
-    print("Executed '"..instruction.."'.\nPC = '"..pc.."'.\tStack Top = '"..tostring(stack_top).."'.")
+------------------------------------ Logger ------------------------------------
+
+local function stack_as_string(stack, stack_top)
+    local stack_as_string = ("{ Top --> |")
+    for i = stack_top, 1, -1 do stack_as_string = stack_as_string .. tostring(stack[i]) .. "|" end
+    stack_as_string = stack_as_string .. " <-- Bottom }"
+    return stack_as_string
 end
 
+local function instruction_as_string(code, instruction_pointer)
+    local instruction = code[instruction_pointer]
+    if instruction == "push" then
+        instruction = instruction .. " " .. tostring(code[instruction_pointer + 1])
+    elseif instruction == "load" or instruction == "store" then
+        instruction = instruction .. " '" .. code[instruction_pointer + 1] .. "'"
+    end
+    instruction = "{ " .. instruction .. " }"
+    return instruction
+end
+
+local function log_intrepreter_start(trace_enabled)
+    if not trace_enabled then return end
+    print("Starting Interpreter...")
+end
+
+local function log_intrepreter_state(trace_enabled, cycle, code, pc, stack, stack_top)
+    if not trace_enabled then return end
+    
+    print("Interpreter Cycle: " .. cycle)
+    print("", "PC = " .. tostring(pc))
+    print("", "Stack = " .. stack_as_string(stack, stack_top))
+    print("", "Current Instruction = " .. instruction_as_string(code, pc))
+end
+
+local function log_interpreter_exit(trace_enabled, return_value)
+    if not trace_enabled then return end
+    print("Finished Execution. Returning '" .. return_value .."'")
+end
+
+------------------------------------ Runner ------------------------------------
+
 local function run(code, memory, stack, trace_enabled)
+    local cycle = 1
     local pc = 1
     local top = 0
-    while pc <= #code do
+
+    log_intrepreter_start(trace_enabled)
+
+    while true do
+        log_intrepreter_state(trace_enabled, cycle, code, pc, stack, top)
+
         local current_instruction = code[pc]
-        if current_instruction == "push" then
+
+        if current_instruction == "ret" then
+            log_interpreter_exit(trace_enabled, stack[top])
+            return stack[top]
+        elseif current_instruction == "push" then
             pc = pc + 1
             top = top + 1
             stack[top] = code[pc]
@@ -284,9 +343,9 @@ local function run(code, memory, stack, trace_enabled)
         else
             error("unknown instruction: '" .. current_instruction .. "'")
         end
-        pc = pc + 1
 
-        if trace_enabled then log_executed_instruction(current_instruction, pc, stack[top]) end
+        pc = pc + 1
+        cycle = cycle + 1
     end
 end
 
@@ -300,8 +359,8 @@ print("Abstract Syntax Tree:", pt(ast), "\n")
 local code = compile(ast)
 print("Compiled Code:", pt(code), "\n")
 
-local memory = { const1 = 1, const10 = 10 }
+local memory = {}
 local stack = {}
-run(code, memory, stack, true)
+local result = run(code, memory, stack, true)
 
-print("Execution Result:", memory.result)
+print("Execution Result:", result)
