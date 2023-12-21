@@ -205,11 +205,16 @@ local function variable_index_from_name(state, variable_name)
     return num
 end
 
+local function assert_variable_is_defined(state, variable_name)
+    assert(state.vars[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
+end
+
 local function generate_code_from_expression(state, expression)
     if expression.tag == "number" then
         add_opcode(state, "push")
         add_opcode(state, expression.number_value)
     elseif expression.tag == "variable" then
+        assert_variable_is_defined(state, expression.variable_name)
         add_opcode(state, "load")
         add_opcode(state, variable_index_from_name(state, expression.variable_name))
     elseif expression.tag == "binop" then
@@ -322,6 +327,9 @@ local function run(code, memory, stack, trace_enabled)
             top = top + 1
             -- TODO: might be useful to throw undefined variable exception here
             --       in case the variable is not present in the memory
+            -- UPDATE: now that we handle undefined variables at compile time, this is no longer an issue.
+            --      BUT, if we separate out compilation and execution stages later on, we will still need
+            --           to verify this at runtime.
             stack[top] = memory[code[pc]]
         elseif code[pc] == "store" then
             pc = pc + 1
