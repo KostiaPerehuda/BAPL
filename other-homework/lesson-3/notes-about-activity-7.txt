@@ -1,0 +1,10 @@
+Activity 7 - Print Statement
+
+------------------------------------------------------------------------------------------------------------------------
+
+Add a print statement to the language, with the syntax @ exp.
+
+This is done as a commit to the project-homework interpreter.
+
+Notes:
+I'm planning to change the syntax of this statement in the future

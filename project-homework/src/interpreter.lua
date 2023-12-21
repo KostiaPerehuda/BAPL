@@ -118,6 +118,15 @@ local return_keyword = "return" * space
 
 local return_statement = return_keyword * expression / to_return_node
 
+------------------------------- Print Statement --------------------------------
+local function to_print_node(expression)
+    return { tag = "print", expression = expression }
+end
+
+local print_keyword = "@" * space
+
+local print_statement = print_keyword * expression / to_print_node
+
 ----------------------------- Sequences and Blocks -----------------------------
 local function skip_node()
     return { tag = "skip" }
@@ -155,7 +164,7 @@ local block     = lpeg.V"block"
 --       local variables and stack frames.
 local statements = lpeg.P{"sequence",
     sequence  = lpeg.Ct((statement * (delimiter * statement)^0 * delimiter^-1)^-1) / fold_right_to_sequence_node,
-    statement = block + assignment + return_statement,
+    statement = block + assignment + return_statement + print_statement,
     block     = open_brace * sequence * close_brace,
 }
 --------------------------------------------------------------------------------
@@ -216,6 +225,9 @@ local function generate_code_from_statement(state, statement)
     elseif statement.tag == "return" then
         generate_code_from_expression(state, statement.expression)
         add_opcode(state, "ret")
+    elseif statement.tag == "print" then
+        generate_code_from_expression(state, statement.expression)
+        add_opcode(state, "print")
     elseif statement.tag == "skip" then
         --skip
     else
@@ -261,9 +273,9 @@ local function log_intrepreter_state(trace_enabled, cycle, code, pc, stack, stac
     if not trace_enabled then return end
     
     print("Interpreter Cycle: " .. cycle)
-    print("", "PC = " .. tostring(pc))
-    print("", "Stack = " .. stack_as_string(stack, stack_top))
-    print("", "Current Instruction = " .. instruction_as_string(code, pc))
+    print("\t" .. "PC = " .. tostring(pc))
+    print("\t" .. "Stack = " .. stack_as_string(stack, stack_top))
+    print("\t" .. "Current Instruction = " .. instruction_as_string(code, pc))
 end
 
 local function log_interpreter_exit(trace_enabled, return_value)
@@ -288,6 +300,9 @@ local function run(code, memory, stack, trace_enabled)
         if current_instruction == "ret" then
             log_interpreter_exit(trace_enabled, stack[top])
             return stack[top]
+        elseif current_instruction == "print" then
+            print(stack[top])
+            top = top - 1
         elseif current_instruction == "push" then
             pc = pc + 1
             top = top + 1
@@ -363,4 +378,4 @@ local memory = {}
 local stack = {}
 local result = run(code, memory, stack, true)
 
-print("Execution Result:", result)
+print("Execution Result = " .. tostring(result))
