@@ -195,13 +195,23 @@ local function get_opcode_from_operator(operator)
     return opcode_from_operator[operator] or error("invalid tree")
 end
 
+local function variable_index_from_name(state, variable_name)
+    local num = state.vars[variable_name]
+    if not num then
+        num = state.nvars + 1
+        state.nvars = num
+        state.vars[variable_name] = num
+    end
+    return num
+end
+
 local function generate_code_from_expression(state, expression)
     if expression.tag == "number" then
         add_opcode(state, "push")
         add_opcode(state, expression.number_value)
     elseif expression.tag == "variable" then
         add_opcode(state, "load")
-        add_opcode(state, expression.variable_name)
+        add_opcode(state, variable_index_from_name(state, expression.variable_name))
     elseif expression.tag == "binop" then
         generate_code_from_expression(state, expression.left_operand)
         generate_code_from_expression(state, expression.right_operand)
@@ -218,7 +228,7 @@ local function generate_code_from_statement(state, statement)
     if statement.tag == "assignment" then
         generate_code_from_expression(state, statement.expression)
         add_opcode(state, "store")
-        add_opcode(state, statement.assignment_target)
+        add_opcode(state, variable_index_from_name(state, statement.assignment_target))
     elseif statement.tag == "sequence" then
         generate_code_from_statement(state, statement.first)
         generate_code_from_statement(state, statement.second)
@@ -236,7 +246,7 @@ local function generate_code_from_statement(state, statement)
 end
 
 local function compile(ast)
-    local state = { code = {} }
+    local state = { code = {}, vars = {}, nvars = 0 }
     generate_code_from_statement(state, ast)
     generate_code_from_statement(state, to_return_node(to_number_node(0)))
     return state.code
