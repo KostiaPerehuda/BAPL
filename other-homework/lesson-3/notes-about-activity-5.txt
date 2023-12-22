@@ -50,3 +50,17 @@ Notes:
     But programs such as (" ; ") or (" ;;;;;; ") are considered to be invalid, because a semicolon is a
         statement delimiter in a sequence, so there must be a statement preceding the semicolon, therefore these
         programs are considered invalid.
+    
+UPDATE:
+    From the user's perspective, the fact that the code like "statement1 ;;;;;; statement2" is allowed
+        might well indicate that a single semicolon acts as a statement delimiter and nothingness between
+         semicolons is interpreted as an empty statement (which is not the case at all internally).
+    Therefore, from the user's prespective, it may be reasonable to assume that the programs like " ;;;;; "
+        should be valid and parsed into a sequence of empty statements delimitered by the semicolons.
+        And they would be confused why  " ;;;;; " is an invalid program while "    " and
+        "statement1 ;;;;;; statement2" are valid.
+
+    Therefore, I relaxed the rule that there must be a statement preceding a statement delimiter and now
+        " ;;;;; " is considered to be a valid program, that parses into an empty sequence.
+
+

@@ -163,7 +163,7 @@ local block     = lpeg.V"block"
 --       Will most probably be changed in the future when we will implement
 --       local variables and stack frames.
 local statements = lpeg.P{"sequence",
-    sequence  = lpeg.Ct((statement * (delimiter * statement)^0 * delimiter^-1)^-1) / fold_right_to_sequence_node,
+    sequence  = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     statement = block + assignment + return_statement + print_statement,
     block     = open_brace * sequence * close_brace,
 }
