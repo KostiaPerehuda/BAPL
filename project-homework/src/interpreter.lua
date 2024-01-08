@@ -50,13 +50,16 @@ local function apply_unary_minus_operator(expression)
 end
 
 -------------------------------- Basic Patterns --------------------------------
-local space = lpeg.S(" \t\n")^0 * longest_match_tracker
-
 local digit = lpeg.R("09")
 local hex_digit = lpeg.R("09", "af", "AF")
 
 local alpha_char = lpeg.R("AZ", "az")
 local alpha_numeric_char = alpha_char + digit
+
+local whitespace = lpeg.S(" \t\n")
+local comment = "#" * (lpeg.P(1) - "\n")^0
+
+local space = (whitespace + comment)^0 * longest_match_tracker
 
 ------------------------------------ Number ------------------------------------
 local function to_number_node(number)
