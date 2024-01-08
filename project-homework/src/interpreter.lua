@@ -3,9 +3,20 @@ local pt = require "pt".pt
 
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
+------------------------------------ Debug -------------------------------------
+
 local function I(message)
     return lpeg.P(function() print(message); return true end)
 end
+
+local longest_match = 0
+
+local longest_match_tracker = lpeg.P(function(_,position)
+    longest_match = math.max(longest_match, position)
+    return true
+end)
+
+-------------------------------- Basic Patterns --------------------------------
 
 local function to_binop_node(left_operand, operator, right_operand)
     return {
@@ -39,7 +50,7 @@ local function apply_unary_minus_operator(expression)
 end
 
 -------------------------------- Basic Patterns --------------------------------
-local space = lpeg.S(" \t\n")^0
+local space = lpeg.S(" \t\n")^0 * longest_match_tracker
 
 local digit = lpeg.R("09")
 local hex_digit = lpeg.R("09", "af", "AF")
@@ -177,8 +188,19 @@ local grammar = space * statements * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
+local function syntax_error(input, longest_match)
+    io.stderr:write("syntax error\n")
+    io.stderr:write(string.sub(input, longest_match - 10, longest_match - 1), "|",
+                    string.sub(input, longest_match, longest_match + 11), "\n")
+  end
+
 local function parse(input)
-    return grammar:match(input)
+    local ast = grammar:match(input)
+    if not ast then
+        syntax_error(input, longest_match)
+        os.exit(1)
+    end
+    return ast
 end
 
 ------------------------------------------------------- Compiler -------------------------------------------------------
