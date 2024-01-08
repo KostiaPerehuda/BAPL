@@ -16,7 +16,7 @@ local longest_match_tracker = lpeg.P(function(_,position)
     return true
 end)
 
--------------------------------- Basic Patterns --------------------------------
+------------------------------ AST Node Factories ------------------------------
 
 local function to_binop_node(left_operand, operator, right_operand)
     return {
@@ -56,9 +56,14 @@ local hex_digit = lpeg.R("09", "af", "AF")
 local alpha_char = lpeg.R("AZ", "az")
 local alpha_numeric_char = alpha_char + digit
 
-local whitespace = lpeg.S(" \t\n")
-local comment = "#" * (lpeg.P(1) - "\n")^0
+local whitespace = lpeg.S(" \t\r\n")
 
+----------------------------------- Comments -----------------------------------
+local line_comment = "#" * (lpeg.P(1) - lpeg.S("\r\n"))^0
+local block_comment = "#{" * (lpeg.P(1) - "#}")^0 * "#}"
+local comment = block_comment + line_comment
+
+------------------------------------ Spaces ------------------------------------
 local space = (whitespace + comment)^0 * longest_match_tracker
 
 ------------------------------------ Number ------------------------------------
@@ -199,7 +204,8 @@ local function get_line_and_column(input, position)
         line_number = line_number + 1
         position = position - line:len()
         if position <= 0 then
-            return line_number, position + line:len(), line:sub(1, -2)
+            trimmed_line = (line:sub(-2, -2) == "\r") and line:sub(1, -3) or line:sub(1, -2)
+            return line_number, position + line:len(), trimmed_line
         end
     end
 end
