@@ -3,6 +3,10 @@ local pt = require "pt".pt
 
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
+local function I(message)
+    return lpeg.P(function() print(message); return true end)
+end
+
 local function to_binop_node(left_operand, operator, right_operand)
     return {
         tag = "binop",
