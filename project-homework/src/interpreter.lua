@@ -188,18 +188,31 @@ local grammar = space * statements * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
+local function get_line_and_column(input, position)
+    input = input .. "\n"
+    line_number = 0
+
+    for line in input:gmatch(".-\n") do
+        line_number = line_number + 1
+        position = position - line:len()
+        if position <= 0 then
+            return line_number, position + line:len(), line:sub(1, -2)
+        end
+    end
+end
+
 local function syntax_error(input, longest_match)
-    io.stderr:write("syntax error\n")
-    io.stderr:write(string.sub(input, longest_match - 10, longest_match - 1), "|",
-                    string.sub(input, longest_match, longest_match + 11), "\n")
+    -- longest match == next char to consume
+    line_num, col_num, line = get_line_and_column(input, longest_match)
+    io.stderr:write(string.format("Syntax Error at Line %d, Col %d! ('%s')\n", line_num, col_num, line))
+    io.stderr:write(string.format("Unexpected Symbol '%s' after '%s'\n",
+                                        line:sub(col_num, col_num), line:sub(1, col_num-1)))
+    os.exit(1)
   end
 
 local function parse(input)
     local ast = grammar:match(input)
-    if not ast then
-        syntax_error(input, longest_match)
-        os.exit(1)
-    end
+    if not ast then syntax_error(input, longest_match) end
     return ast
 end
 
