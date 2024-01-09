@@ -45,8 +45,8 @@ local function fold_right_into_binop_tree(list)
     return tree
 end
 
-local function apply_unary_minus_operator(expression)
-    return { tag = "unary_minus", operand = expression }
+local function apply_unary_operator(operator, expression)
+    return { tag = "unary_operator", operator = operator, operand = expression }
 end
 
 -------------------------------- Basic Patterns --------------------------------
@@ -126,29 +126,29 @@ end
 local variable = identifier / to_variable_node
 
 ---------------------------------- Expression ----------------------------------
-local unary_minus_operator    = "-" * space
 
-local exponential_operator    = lpeg.C(lpeg.S("^"))   * space
-local multiplicative_operator = lpeg.C(lpeg.S("*/%")) * space
-local additive_operator       = lpeg.C(lpeg.S("+-"))  * space
+local exponential_operator    = T(lpeg.C(lpeg.S("^")))
+local negation_operator       = T(lpeg.C(lpeg.S("-!")))
+local additive_operator       = T(lpeg.C(lpeg.S("+-")))
+local multiplicative_operator = T(lpeg.C(lpeg.S("*/%")))
 
 local comparison_operator = lpeg.C(lpeg.P("==") + "!=" + "<=" + ">=" + "<" +">") * space
 
-local expression  = lpeg.V"expression"
-local comparison  = lpeg.V"comparison"
-local     sum     = lpeg.V"sum"
-local     term    = lpeg.V"term"
-local   exponent  = lpeg.V"exponent"
-local unary_minus = lpeg.V"unary_minus"
-local     atom    = lpeg.V"atom"
+local expression = lpeg.V"expression"
+local comparison = lpeg.V"comparison"
+local    sum     = lpeg.V"sum"
+local    term    = lpeg.V"term"
+local  negation  = lpeg.V"negation"
+local  exponent  = lpeg.V"exponent"
+local    atom    = lpeg.V"atom"
 
 local expression = lpeg.P{"expression", expression = comparison,
-    comparison  = lpeg.Ct(   sum      * (  comparison_operator   *     sum     )^0) / fold_left_into_binop_tree,
-       sum      = lpeg.Ct(   term     * (   additive_operator    *     term    )^0) / fold_left_into_binop_tree,
-       term     = lpeg.Ct(unary_minus * (multiplicative_operator *  unary_minus)^0) / fold_left_into_binop_tree,
-    unary_minus = (unary_minus_operator * unary_minus / apply_unary_minus_operator) + exponent,
-     exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
-       atom     = (T"(" * expression * T")") + number + variable,
+    comparison = lpeg.Ct(  sum    * (  comparison_operator   *   sum   )^0) / fold_left_into_binop_tree,
+       sum     = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
+       term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
+     negation  = (negation_operator * negation / apply_unary_operator) + exponent,
+     exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
+       atom    = (T"(" * expression * T")") + number + variable,
 }
 
 ---------------------------------- Assignment ----------------------------------
@@ -251,15 +251,23 @@ function Compiler:add_opcode(opcode)
     code[#code + 1] = opcode
 end
 
-local opcode_from_operator = {
+local opcode_from_binary_operator = {
     ["=="] = "eq", ["!="] = "neq", ["<="] = "lte", [">="] = "gte", ["<"] = "lt", [">"] = "gt",
     ["+"] = "add", ["-"] = "sub",
     ["*"] = "mul", ["/"] = "div", ["%"] = "mod",
     ["^"] = "exp",
 }
 
-local function get_opcode_from_operator(operator)
-    return opcode_from_operator[operator] or error("invalid tree")
+local function get_opcode_from_binary_operator(operator)
+    return opcode_from_binary_operator[operator] or error("invalid tree")
+end
+
+local opcode_from_unary_operator = {
+    ["-"] = "negate", ["!"] = "not",
+}
+
+local function get_opcode_from_unary_operator(operator)
+    return opcode_from_unary_operator[operator] or error("invalid tree")
 end
 
 function Compiler:variable_index_from_name(variable_name)
@@ -287,10 +295,10 @@ function Compiler:generate_code_from_expression(expression)
     elseif expression.tag == "binop" then
         self:generate_code_from_expression(expression.left_operand)
         self:generate_code_from_expression(expression.right_operand)
-        self:add_opcode(get_opcode_from_operator(expression.operator))
-    elseif expression.tag == "unary_minus" then
+        self:add_opcode(get_opcode_from_binary_operator(expression.operator))
+    elseif expression.tag == "unary_operator" then
         self:generate_code_from_expression(expression.operand)
-        self:add_opcode("negate")
+        self:add_opcode(get_opcode_from_unary_operator(expression.operator))
     else
         error("invalid tree")
     end
@@ -419,6 +427,8 @@ local function run(code, memory, stack, trace_enabled)
         elseif current_instruction == "gt" then
             stack[top - 1] = (stack[top - 1] > stack[top]) and 1 or 0
             top = top - 1
+        elseif current_instruction == "not" then
+            stack[top] = (stack[top] == 0) and 1 or 0
         elseif current_instruction == "add" then
             stack[top - 1] = stack[top - 1] + stack[top]
             top = top - 1

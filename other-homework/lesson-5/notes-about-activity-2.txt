@@ -1,0 +1,19 @@
+Activity 2 - 'not' Operator
+
+------------------------------------------------------------------------------------------------------------------------
+
+Implement an operator not in your language, with the syntax ! exp.
+(Although not is not formally a control structure, it also deals with conditions and / or "booleans" in the language).
+Consider carefully what should be the priority of this operator.
+
+------------------------------------------------------------------------------------------------------------------------
+
+The 'not' operator accepts a single expression as its operand.
+Since the numbers is the only datatype in the language (for now), the 'not' operator is defined as follows:
+
+    evaluation_of( ! <expression> ):
+        == 1    if evaluation_of( <expression> ) == 0
+        == 0    otherwise
+
+Priority:
+    This is a unary operator, so I deciced to give it the priority equivalent to that of the unary minus operator
