@@ -75,7 +75,18 @@ local function T(t)
     return t * space
 end
 
+local reserved_words = {"return", "if"}
+
+local reserved = lpeg.P(false)
+for i = 1, #reserved_words do
+    reserved = reserved + reserved_words[i]
+end
+reserved = reserved * -alpha_numeric_char_or_underscore
+
 local function RW(word)
+    assert(reserved:match(word),
+        "'"..word.."' cannot be used as a reserved word! "
+        .."You must first insert it into the 'reserved_words' list!")
     return word * -alpha_numeric_char_or_underscore * space
 end
 
@@ -96,7 +107,7 @@ local hex_number =  hex_number_prefix * hex_number_body
 local number = lpeg.C(dec_number + hex_number) / to_number_node * space
 
 ---------------------------------- Identifier ----------------------------------
-local identifier = lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * space
+local identifier = (lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) - reserved) * space
 
 ----------------------------------- Variable -----------------------------------
 local function to_variable_node(variable_name)
