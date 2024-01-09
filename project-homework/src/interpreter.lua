@@ -56,6 +56,9 @@ local hex_digit = lpeg.R("09", "af", "AF")
 local alpha_char = lpeg.R("AZ", "az")
 local alpha_numeric_char = alpha_char + digit
 
+local alpha_char_or_underscore = alpha_char + "_"
+local alpha_numeric_char_or_underscore = alpha_numeric_char + "_"
+
 local whitespace = lpeg.S(" \t\r\n")
 
 ----------------------------------- Comments -----------------------------------
@@ -65,6 +68,16 @@ local comment = block_comment + line_comment
 
 ------------------------------------ Spaces ------------------------------------
 local space = (whitespace + comment)^0 * longest_match_tracker
+
+--------------------------- Tokens and Reserved Words --------------------------
+
+local function T(t)
+    return t * space
+end
+
+local function RW(word)
+    return word * -alpha_numeric_char_or_underscore * space
+end
 
 ------------------------------------ Number ------------------------------------
 local function to_number_node(number)
@@ -83,9 +96,6 @@ local hex_number =  hex_number_prefix * hex_number_body
 local number = lpeg.C(dec_number + hex_number) / to_number_node * space
 
 ---------------------------------- Identifier ----------------------------------
-local alpha_char_or_underscore = alpha_char + "_"
-local alpha_numeric_char_or_underscore = alpha_numeric_char + "_"
-
 local identifier = lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * space
 
 ----------------------------------- Variable -----------------------------------
@@ -104,9 +114,6 @@ local additive_operator       = lpeg.C(lpeg.S("+-"))  * space
 
 local comparison_operator = lpeg.C(lpeg.P("==") + "!=" + "<=" + ">=" + "<" +">") * space
 
-local  open_bracket = "(" * space
-local close_bracket = ")" * space
-
 local expression  = lpeg.V"expression"
 local comparison  = lpeg.V"comparison"
 local     sum     = lpeg.V"sum"
@@ -121,7 +128,7 @@ local expression = lpeg.P{"expression", expression = comparison,
        term     = lpeg.Ct(unary_minus * (multiplicative_operator *  unary_minus)^0) / fold_left_into_binop_tree,
     unary_minus = (unary_minus_operator * unary_minus / apply_unary_minus_operator) + exponent,
      exponent   = lpeg.Ct(   atom     * (  exponential_operator  *     atom    )^0) / fold_right_into_binop_tree,
-       atom     = (open_bracket * expression * close_bracket) + number + variable,
+       atom     = (T"(" * expression * T")") + number + variable,
 }
 
 ---------------------------------- Assignment ----------------------------------
@@ -129,26 +136,21 @@ local function to_assignment_node(identifier, expression)
     return { tag = "assignment", assignment_target = identifier, expression = expression }
 end
 
-local assignment_operator = "=" * space
-local assignment = identifier * assignment_operator * expression / to_assignment_node
+local assignment = identifier * T"=" * expression / to_assignment_node
 
 ------------------------------- Return Statement -------------------------------
 local function to_return_node(expression)
     return { tag = "return", expression = expression }
 end
 
-local return_keyword = "return" * space
-
-local return_statement = return_keyword * expression / to_return_node
+local return_statement = RW"return" * expression / to_return_node
 
 ------------------------------- Print Statement --------------------------------
 local function to_print_node(expression)
     return { tag = "print", expression = expression }
 end
 
-local print_keyword = "@" * space
-
-local print_statement = print_keyword * expression / to_print_node
+local print_statement = T"@" * expression / to_print_node
 
 ----------------------------- Sequences and Blocks -----------------------------
 local function skip_node()
@@ -169,12 +171,7 @@ local function fold_right_to_sequence_node(statements)
     return node
 end
 
-local semicolon = ";" * space
-
-local  open_brace = "{" * space
-local close_brace = "}" * space
-
-local delimiter = semicolon^1
+local delimiter = T";"^1
 
 local sequence  = lpeg.V"sequence"
 local statement = lpeg.V"statement"
@@ -188,7 +185,7 @@ local block     = lpeg.V"block"
 local statements = lpeg.P{"sequence",
     sequence  = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     statement = block + assignment + return_statement + print_statement,
-    block     = open_brace * sequence * close_brace,
+    block     = T"{" * sequence * T"}",
 }
 --------------------------------------------------------------------------------
 
