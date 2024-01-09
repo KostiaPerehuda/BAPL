@@ -244,8 +244,10 @@ end
 
 ------------------------------------------------------- Compiler -------------------------------------------------------
 
-local function add_opcode(state, opcode)
-    local code = state.code
+local Compiler = { code = {}, vars = {}, nvars = 0 }
+
+function Compiler:add_opcode(opcode)
+    local code = self.code
     code[#code + 1] = opcode
 end
 
@@ -260,54 +262,54 @@ local function get_opcode_from_operator(operator)
     return opcode_from_operator[operator] or error("invalid tree")
 end
 
-local function variable_index_from_name(state, variable_name)
-    local num = state.vars[variable_name]
+function Compiler:variable_index_from_name(variable_name)
+    local num = self.vars[variable_name]
     if not num then
-        num = state.nvars + 1
-        state.nvars = num
-        state.vars[variable_name] = num
+        num = self.nvars + 1
+        self.nvars = num
+        self.vars[variable_name] = num
     end
     return num
 end
 
-local function assert_variable_is_defined(state, variable_name)
-    assert(state.vars[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
+function Compiler:assert_variable_is_defined(variable_name)
+    assert(self.vars[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
 end
 
-local function generate_code_from_expression(state, expression)
+function Compiler:generate_code_from_expression(expression)
     if expression.tag == "number" then
-        add_opcode(state, "push")
-        add_opcode(state, expression.number_value)
+        self:add_opcode("push")
+        self:add_opcode(expression.number_value)
     elseif expression.tag == "variable" then
-        assert_variable_is_defined(state, expression.variable_name)
-        add_opcode(state, "load")
-        add_opcode(state, variable_index_from_name(state, expression.variable_name))
+        self:assert_variable_is_defined(expression.variable_name)
+        self:add_opcode("load")
+        self:add_opcode(self:variable_index_from_name(expression.variable_name))
     elseif expression.tag == "binop" then
-        generate_code_from_expression(state, expression.left_operand)
-        generate_code_from_expression(state, expression.right_operand)
-        add_opcode(state, get_opcode_from_operator(expression.operator))
+        self:generate_code_from_expression(expression.left_operand)
+        self:generate_code_from_expression(expression.right_operand)
+        self:add_opcode(get_opcode_from_operator(expression.operator))
     elseif expression.tag == "unary_minus" then
-        generate_code_from_expression(state, expression.operand)
-        add_opcode(state, "negate")
+        self:generate_code_from_expression(expression.operand)
+        self:add_opcode("negate")
     else
         error("invalid tree")
     end
 end
 
-local function generate_code_from_statement(state, statement)
+function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
-        generate_code_from_expression(state, statement.expression)
-        add_opcode(state, "store")
-        add_opcode(state, variable_index_from_name(state, statement.assignment_target))
+        self:generate_code_from_expression(statement.expression)
+        self:add_opcode("store")
+        self:add_opcode(self:variable_index_from_name(statement.assignment_target))
     elseif statement.tag == "sequence" then
-        generate_code_from_statement(state, statement.first)
-        generate_code_from_statement(state, statement.second)
+        self:generate_code_from_statement(statement.first)
+        self:generate_code_from_statement(statement.second)
     elseif statement.tag == "return" then
-        generate_code_from_expression(state, statement.expression)
-        add_opcode(state, "ret")
+        self:generate_code_from_expression(statement.expression)
+        self:add_opcode("ret")
     elseif statement.tag == "print" then
-        generate_code_from_expression(state, statement.expression)
-        add_opcode(state, "print")
+        self:generate_code_from_expression(statement.expression)
+        self:add_opcode("print")
     elseif statement.tag == "skip" then
         --skip
     else
@@ -316,10 +318,9 @@ local function generate_code_from_statement(state, statement)
 end
 
 local function compile(ast)
-    local state = { code = {}, vars = {}, nvars = 0 }
-    generate_code_from_statement(state, ast)
-    generate_code_from_statement(state, to_return_node(to_number_node(0)))
-    return state.code
+    Compiler:generate_code_from_statement(ast)
+    Compiler:generate_code_from_statement(to_return_node(to_number_node(0)))
+    return Compiler.code
 end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
