@@ -26,7 +26,7 @@ local function node(tag, ...)
     for i, v in ipairs(labels) do fields[i] = v.." = "..v end 
     fields = table.concat(fields, ", ")
     local code  = string.format("return function(%s) return {tag = '%s', %s} end", params, tag, fields)
-    return load(code)()
+    return assert(load(code))()
 end
 
 local function node(tag, ...)
@@ -204,11 +204,16 @@ local function fold_right_to_sequence_node(statements)
     return node
 end
 
+local function to_if_node(condition, if_branch)
+    return { tag = "if", condition = condition, if_branch = if_branch }
+end
+
 local delimiter = T";"^1
 
 local sequence  = lpeg.V"sequence"
-local statement = lpeg.V"statement"
 local block     = lpeg.V"block"
+local statement    = lpeg.V"statement"
+local if_statement = lpeg.V"if_statement"
 
 -- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
 --       for the compiler.
@@ -216,9 +221,11 @@ local block     = lpeg.V"block"
 --       Will most probably be changed in the future when we will implement
 --       local variables and stack frames.
 local statements = lpeg.P{"sequence",
-    sequence  = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
-    statement = block + assignment + return_statement + print_statement,
-    block     = T"{" * sequence * T"}",
+    sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
+    block    = T"{" * sequence * T"}",
+    
+    statement    = block + assignment + return_statement + print_statement + if_statement,
+    if_statement = RW"if" * expression * block / to_if_node,
 }
 --------------------------------------------------------------------------------
 
@@ -317,6 +324,20 @@ function Compiler:generate_code_from_expression(expression)
     end
 end
 
+function Compiler:current_position()
+    return #self.code
+end
+
+function Compiler:generate_jmp_if_zero()
+    self:add_opcode("jump_if_zero")
+    self:add_opcode(0)
+    return self:current_position()
+end
+
+function Compiler:point_jump_to_here(jump)
+    self.code[jump] = self:current_position()
+end
+
 function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_expression(statement.expression)
@@ -325,6 +346,11 @@ function Compiler:generate_code_from_statement(statement)
     elseif statement.tag == "sequence" then
         self:generate_code_from_statement(statement.first)
         self:generate_code_from_statement(statement.second)
+    elseif statement.tag == "if" then
+        self:generate_code_from_expression(statement.condition)
+        local jump = self:generate_jmp_if_zero()
+        self:generate_code_from_statement(statement.if_branch)
+        self:point_jump_to_here(jump)
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("ret")
@@ -405,6 +431,11 @@ local function run(code, memory, stack, trace_enabled)
         elseif current_instruction == "print" then
             print(stack[top])
             top = top - 1
+        elseif current_instruction == "jump" then
+            pc = code[pc + 1]
+        elseif current_instruction == "jump_if_zero" then
+            pc = (stack[top] == 0) and code[pc + 1] or pc + 1
+            top = top - 1
         elseif current_instruction == "push" then
             pc = pc + 1
             top = top + 1
@@ -465,6 +496,9 @@ local function run(code, memory, stack, trace_enabled)
         else
             error("unknown instruction: '" .. current_instruction .. "'")
         end
+
+        -- can only have numbers on the stack
+        assert(top == 0 or top > 0 and type(stack[top]) == "number")
 
         pc = pc + 1
         cycle = cycle + 1
