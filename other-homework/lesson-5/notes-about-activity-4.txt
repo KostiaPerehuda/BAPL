@@ -1,0 +1,52 @@
+Activity 4 - Rewriting The Function "node"
+
+------------------------------------------------------------------------------------------------------------------------
+
+Rewrite the function node without using meta-programming. Instead, use the following structure:
+
+local function node (tag, ...)
+  local labels = table.pack(...)
+  return function (...)
+    local params = table.pack(...)
+    -- <fill in here>
+  end
+end
+
+Your code should create a table and fill it with fields with names coming from the list labels and values coming from the list params. Don't forget to also add the field tag to that table.
+
+------------------------------------------------------------------------------------------------------------------------
+
+Reference implementation can be found in 'activity-4.lua' file of this folder.
+
+Although this node function can be generally useful and helps simplify some things, I decided not to use it in the
+interpreter. The reasons for this are:
+    1 - I found using this function directly in the grammar itself may pollute the defintion of the grammar and
+    shift the focus from what is important. One soultion to this issue might be to extract that function call into a
+    variable, and use that variable in the grammar itself. For example, instead of function defintion like this:
+
+            local function to_binop_node(left_operand, operator, right_operand)
+                return { tag = "binop", left_operand = left_operand, operator = operator, right_operand = right_operand }
+            end
+
+        we can create something like this:
+
+            local to_binop_node = node("binop", "left_operand", "operator", "right_operand")
+
+    2 - Most of the node factory functions are one liners and are only used in one place in the grammar. 
+        I like to keep the code cohesive, so in most of the cases the functions are defined right next to the place
+        where they are used. For example, like this:
+
+            local function to_return_node(expression)
+                return { tag = "return", expression = expression }
+            end
+
+            local return_statement = RW"return" * expression / to_return_node
+
+        One might argue that this is the best place to use such a generic node(...) function, which simplifies the code
+        to something like this:
+
+            local return_statement = RW"return" * expression / node("return", "expression")
+
+        However, I would still prefer the first option, because the reader can see clearly what will be the result
+        of performing this operation, but with the second option, the reader will need to know the behaviour of the
+        node(...) factory which is defined somewhere else and uses not so trivial constructs of the Lua language.

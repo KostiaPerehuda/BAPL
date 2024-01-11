@@ -18,6 +18,7 @@ end)
 
 ------------------------------ AST Node Factories ------------------------------
 
+--[=[
 local function node(tag, ...)
     local labels = table.pack(...)
     local params = table.concat(labels, ", ")
@@ -28,36 +29,18 @@ local function node(tag, ...)
     return load(code)()
 end
 
-local function to_binop_node(left_operand, operator, right_operand)
-    return {
-        tag = "binop",
-        left_operand = left_operand,
-        operator = operator,
-        right_operand = right_operand,
-    }
-end
-
--- Convert a list {n1, "+", n2, "+", n3, ...} into a tree
--- {...{operator = "+", left_operand = {operator = "+", left_operand = n1, right_operand = n2}, right_operand = n3}...}
-local function fold_left_into_binop_tree(list)
-    local tree = list[1]
-    for i = 2, #list, 2 do
-        tree = to_binop_node(tree, list[i], list[i + 1])
+local function node(tag, ...)
+    local labels = table.pack(...)
+    return function(...)
+        local params = table.pack(...)
+        local node = { tag = tag }
+        for i = 1, #labels do
+            node[labels[i]] = params[i]
+        end
+        return node
     end
-    return tree
 end
-
-local function fold_right_into_binop_tree(list)
-    local tree = list[#list]
-    for i = #list - 1, 2, -2 do
-        tree = to_binop_node(list[i - 1], list[i], tree)
-    end
-    return tree
-end
-
-local function apply_unary_operator(operator, expression)
-    return { tag = "unary_operator", operator = operator, operand = expression }
-end
+--]=]
 
 -------------------------------- Basic Patterns --------------------------------
 local digit = lpeg.R("09")
@@ -136,6 +119,26 @@ end
 local variable = identifier / to_variable_node
 
 ---------------------------------- Expression ----------------------------------
+
+local function to_binop_node(left_operand, operator, right_operand)
+    return { tag = "binop", left_operand = left_operand, operator = operator, right_operand = right_operand }
+end
+
+local function fold_left_into_binop_tree(list)
+    local tree = list[1]
+    for i = 2, #list, 2 do tree = to_binop_node(tree, list[i], list[i + 1]) end
+    return tree
+end
+
+local function fold_right_into_binop_tree(list)
+    local tree = list[#list]
+    for i = #list - 1, 2, -2 do tree = to_binop_node(list[i - 1], list[i], tree) end
+    return tree
+end
+
+local function apply_unary_operator(operator, expression)
+    return { tag = "unary_operator", operator = operator, operand = expression }
+end
 
 local exponential_operator    = T(lpeg.C(lpeg.S("^")))
 local negation_operator       = T(lpeg.C(lpeg.S("-!")))

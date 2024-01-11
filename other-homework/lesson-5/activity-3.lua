@@ -1,3 +1,5 @@
+local pt = require "pt".pt
+
 local function node(tag, ...)
     local labels = table.pack(...)
     local params = table.concat(labels, ", ")
@@ -9,5 +11,5 @@ local function node(tag, ...)
     return load(code)()
 end
 
-assignment_node = node("assignment", "assignment_target", "expression")
-print(assignment_node)
+assignment_node = node("assignment", "assignment_target", "expression")("hello", "world")
+print(pt(assignment_node))
