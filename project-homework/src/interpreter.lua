@@ -335,7 +335,7 @@ function Compiler:generate_jmp_if_zero()
 end
 
 function Compiler:point_jump_to_here(jump)
-    self.code[jump] = self:current_position()
+    self.code[jump] = self:current_position() - jump
 end
 
 function Compiler:generate_code_from_statement(statement)
@@ -432,9 +432,11 @@ local function run(code, memory, stack, trace_enabled)
             print(stack[top])
             top = top - 1
         elseif current_instruction == "jump" then
-            pc = code[pc + 1]
+            pc = pc + 1
+            pc = pc + code[pc]
         elseif current_instruction == "jump_if_zero" then
-            pc = (stack[top] == 0) and code[pc + 1] or pc + 1
+            pc = pc + 1
+            pc = pc + ((stack[top] == 0) and code[pc] or 0)
             top = top - 1
         elseif current_instruction == "push" then
             pc = pc + 1
