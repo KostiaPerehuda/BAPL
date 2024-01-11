@@ -18,6 +18,16 @@ end)
 
 ------------------------------ AST Node Factories ------------------------------
 
+local function node(tag, ...)
+    local labels = table.pack(...)
+    local params = table.concat(labels, ", ")
+    local fields = {}
+    for i, v in ipairs(labels) do fields[i] = v.." = "..v end 
+    fields = table.concat(fields, ", ")
+    local code  = string.format("return function(%s) return {tag = '%s', %s} end", params, tag, fields)
+    return load(code)()
+end
+
 local function to_binop_node(left_operand, operator, right_operand)
     return {
         tag = "binop",
@@ -336,7 +346,7 @@ end
 ------------------------------------ Logger ------------------------------------
 
 local function stack_as_string(stack, stack_top)
-    local stack_as_string = ("{ Top --> |")
+    local stack_as_string = "{ Top --> |"
     for i = stack_top, 1, -1 do stack_as_string = stack_as_string .. tostring(stack[i]) .. "|" end
     stack_as_string = stack_as_string .. " <-- Bottom }"
     return stack_as_string
