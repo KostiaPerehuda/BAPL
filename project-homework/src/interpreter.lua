@@ -68,7 +68,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "else"}
+local reserved_words = {"return", "if", "elseif", "else"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -208,6 +208,13 @@ local function to_if_node(condition, if_branch, else_branch)
     return { tag = "if", condition = condition, if_branch = if_branch, else_branch = else_branch }
 end
 
+local function fold_right_to_if_node(list)
+    local last_if_node_index = #list - (#list % 2) - 1
+    local node = to_if_node(list[last_if_node_index], list[last_if_node_index + 1], list[last_if_node_index + 2])
+    for i = last_if_node_index - 1, 1, -2 do node = to_if_node(list[i - 1], list[i], node) end
+    return node
+end
+
 local delimiter = T";"^1
 
 local sequence  = lpeg.V"sequence"
@@ -225,7 +232,10 @@ local statements = lpeg.P{"sequence",
     block    = T"{" * sequence * T"}",
     
     statement    = block + assignment + return_statement + print_statement + if_statement,
-    if_statement = RW"if" * expression * block * (RW"else" * block)^-1 / to_if_node,
+    if_statement = lpeg.Ct((RW"if" * expression * block)
+                            * (RW"elseif" * expression * block)^0
+                            * (RW"else" * block)^-1
+                   ) / fold_right_to_if_node,
 }
 --------------------------------------------------------------------------------
 
