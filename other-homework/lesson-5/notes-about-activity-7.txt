@@ -1,0 +1,7 @@
+Activity 4 - Implementing If-then-else
+
+------------------------------------------------------------------------------------------------------------------------
+
+With if-then and if-then-else constructs, our simple checks for the variable being used before initialized no longer 
+work at compile time.
+I've added a runtime check to mitigate this, but will implement better compile time alaysis later on... 

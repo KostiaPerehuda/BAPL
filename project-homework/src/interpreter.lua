@@ -68,7 +68,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if"}
+local reserved_words = {"return", "if", "else"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -204,8 +204,8 @@ local function fold_right_to_sequence_node(statements)
     return node
 end
 
-local function to_if_node(condition, if_branch)
-    return { tag = "if", condition = condition, if_branch = if_branch }
+local function to_if_node(condition, if_branch, else_branch)
+    return { tag = "if", condition = condition, if_branch = if_branch, else_branch = else_branch }
 end
 
 local delimiter = T";"^1
@@ -225,7 +225,7 @@ local statements = lpeg.P{"sequence",
     block    = T"{" * sequence * T"}",
     
     statement    = block + assignment + return_statement + print_statement + if_statement,
-    if_statement = RW"if" * expression * block / to_if_node,
+    if_statement = RW"if" * expression * block * (RW"else" * block)^-1 / to_if_node,
 }
 --------------------------------------------------------------------------------
 
@@ -328,10 +328,14 @@ function Compiler:current_position()
     return #self.code
 end
 
-function Compiler:generate_jmp_if_zero()
-    self:add_opcode("jump_if_zero")
+function Compiler:generate_jump(jump)
+    self:add_opcode(jump or "jump")
     self:add_opcode(0)
     return self:current_position()
+end
+
+function Compiler:generate_jump_if_zero()
+    return self:generate_jump("jump_if_zero")
 end
 
 function Compiler:point_jump_to_here(jump)
@@ -348,9 +352,17 @@ function Compiler:generate_code_from_statement(statement)
         self:generate_code_from_statement(statement.second)
     elseif statement.tag == "if" then
         self:generate_code_from_expression(statement.condition)
-        local jump = self:generate_jmp_if_zero()
+        local jump = self:generate_jump_if_zero()
         self:generate_code_from_statement(statement.if_branch)
-        self:point_jump_to_here(jump)
+        if statement.else_branch == nil then
+            self:point_jump_to_here(jump)
+        else
+            local jump2 = self:generate_jump()
+            self:point_jump_to_here(jump)
+            self:generate_code_from_statement(statement.else_branch)
+            self:point_jump_to_here(jump2)
+        end
+
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("ret")
@@ -451,6 +463,7 @@ local function run(code, memory, stack, trace_enabled)
             --      BUT, if we separate out compilation and execution stages later on, we will still need
             --           to verify this at runtime.
             stack[top] = memory[code[pc]]
+            assert(stack[top] ~= nil, "Runtime Error: Attempt to reference unitialized variable '" .. code[pc] .. "'!")
         elseif code[pc] == "store" then
             pc = pc + 1
             memory[code[pc]] = stack[top]
