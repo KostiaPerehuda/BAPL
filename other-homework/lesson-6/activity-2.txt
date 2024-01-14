@@ -1,0 +1,68 @@
+Activity 2 - Loops In Arrays
+
+------------------------------------------------------------------------------------------------------------------------
+
+In languages like Lua, we can create an array and set it as the value of its first element:
+
+  a = {}
+  a[1] = a
+
+After that, a[1][1]...[1] is equal to a[1], for any number of indexations. Can you do the same in other languages you know? If not, why not?
+
+------------------------------------------------------------------------------------------------------------------------
+
+Python:
+    This is possible to do in python:
+
+        a = {}
+        a[0] = a
+        print(a[0][0][0])      # --> {0: {...}}
+        print(a[0][0][0] == a) # --> True
+
+    will work as we expect
+
+Java:
+    This is also possible in Java, however we have to help (or trick?) our compile-time typesystem.
+
+    In Java everything is a subtype of Object, therefore an array type is a subtype of Object too.
+    So the following snippet of code is completely legal:
+
+        Object[] a = new Object[1];
+        a[0] = a;
+    
+    So access to 'a[0]' will evaluate to the same object reference as 'a' contains, and the run-time type
+    of 'a[0]' is 'Object[]', so we can theoretically evaluate expressions like 'a[0][0][0]...[0]'.
+    However, the compile-time type system stops us from doing that, because it can only infer that result
+    of evaluating 'a[0]' will be of type Object, not Array type.
+    This is where we can help our compiler type system by inserting a "downcast". A downcast '(T)...' is
+    essentially a promise to the compiler that the runtime will check the run-time type of the resulting
+    object and continue execution only if it is a subtype of T, or abort otherwise.
+    
+    With this trick the following code works just fine:
+
+        public class Activity2 {
+            public static void main(String[] args) {
+                Object[] a = new Object[1];
+                a[0] = a;
+                System.out.println(((Object[])((Object[])a[0])[0])[0] == a); // --> true
+            }
+        }
+
+C/C++:
+    Even in C/C++ where the arrays are just blocks of memory we can demonstrate the same behaviour via
+    pointer dereferences. If a pointer points to itself, dereferencing it will yeild the same value as
+    the pointer itself contains.
+    The only thing we need to do is to again trick the type system with some typecasts:
+
+        #include <iostream>
+
+        int main()
+        {
+            size_t a[1];
+            a[0] = (size_t)a;
+            std::cout << (((size_t****)a)[0][0][0][0] == (size_t)a) << std::endl; // --> 1
+        }
+
+    works as we expect.
+
+
