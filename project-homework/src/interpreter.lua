@@ -68,7 +68,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "elseif", "else", "while"}
+local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -140,6 +140,18 @@ local function apply_unary_operator(operator, expression)
     return { tag = "unary_operator", operator = operator, operand = expression }
 end
 
+local function to_logical_operator_node(left_operand, operator, right_operand)
+    return { tag = "logical_operator", left_operand = left_operand, operator = operator, right_operand = right_operand }
+end
+
+local function fold_left_into_logical(operator)
+    return function(list)
+        local tree = list[1]
+        for i = 2, #list do tree = to_logical_operator_node(tree, operator, list[i]) end
+        return tree
+    end
+end
+
 local exponential_operator    = T(lpeg.C(lpeg.S("^")))
 local negation_operator       = T(lpeg.C(lpeg.S("-!")))
 local additive_operator       = T(lpeg.C(lpeg.S("+-")))
@@ -147,21 +159,26 @@ local multiplicative_operator = T(lpeg.C(lpeg.S("*/%")))
 
 local comparison_operator = lpeg.C(lpeg.P("==") + "!=" + "<=" + ">=" + "<" +">") * space
 
-local expression = lpeg.V"expression"
-local comparison = lpeg.V"comparison"
-local    sum     = lpeg.V"sum"
-local    term    = lpeg.V"term"
-local  negation  = lpeg.V"negation"
-local  exponent  = lpeg.V"exponent"
-local    atom    = lpeg.V"atom"
+local expression  = lpeg.V"expression"
 
-local expression = lpeg.P{"expression", expression = comparison,
-    comparison = lpeg.Ct(  sum    * (  comparison_operator   *   sum   )^0) / fold_left_into_binop_tree,
-       sum     = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
-       term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
-     negation  = (negation_operator * negation / apply_unary_operator) + exponent,
-     exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
-       atom    = (T"(" * expression * T")") + number + variable,
+local  logical_or = lpeg.V"logical_or"
+local logical_and = lpeg.V"logical_and"
+local  comparison = lpeg.V"comparison"
+local     sum     = lpeg.V"sum"
+local     term    = lpeg.V"term"
+local   negation  = lpeg.V"negation"
+local   exponent  = lpeg.V"exponent"
+local     atom    = lpeg.V"atom"
+
+local expression = lpeg.P{"expression", expression = logical_or,
+     logical_or = lpeg.Ct(logical_and * (RW"or" * logical_and)^0) / fold_left_into_logical("or"),
+    logical_and = lpeg.Ct( comparison * (RW"and" * comparison)^0) / fold_left_into_logical("and"),
+     comparison = lpeg.Ct(  sum    * (  comparison_operator   *   sum   )^0) / fold_left_into_binop_tree,
+        sum     = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
+        term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
+      negation  = (negation_operator * negation / apply_unary_operator) + exponent,
+      exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
+        atom    = (T"(" * expression * T")") + number + variable,
 }
 
 ---------------------------------- Assignment ----------------------------------
@@ -309,6 +326,14 @@ local function get_opcode_from_unary_operator(operator)
     return opcode_from_unary_operator[operator] or error("invalid tree")
 end
 
+local jump_opcode_from_logical_operator = {
+    ["and"] = "jump_if_zero_or_pop", ["or"] = "jump_if_not_zero_or_pop"
+}
+
+local function get_jump_opcode_from_logical_operator(operator)
+    return jump_opcode_from_logical_operator[operator] or error("invalid tree")
+end
+
 function Compiler:variable_index_from_name(variable_name)
     local num = self.vars[variable_name]
     if not num then
@@ -321,26 +346,6 @@ end
 
 function Compiler:assert_variable_is_defined(variable_name)
     assert(self.vars[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
-end
-
-function Compiler:generate_code_from_expression(expression)
-    if expression.tag == "number" then
-        self:add_opcode("push")
-        self:add_opcode(expression.number_value)
-    elseif expression.tag == "variable" then
-        self:assert_variable_is_defined(expression.variable_name)
-        self:add_opcode("load")
-        self:add_opcode(self:variable_index_from_name(expression.variable_name))
-    elseif expression.tag == "binop" then
-        self:generate_code_from_expression(expression.left_operand)
-        self:generate_code_from_expression(expression.right_operand)
-        self:add_opcode(get_opcode_from_binary_operator(expression.operator))
-    elseif expression.tag == "unary_operator" then
-        self:generate_code_from_expression(expression.operand)
-        self:add_opcode(get_opcode_from_unary_operator(expression.operator))
-    else
-        error("invalid tree")
-    end
 end
 
 function Compiler:current_position()
@@ -367,6 +372,31 @@ end
 
 function Compiler:point_jump_to_here(jump)
     self:point_jump_to(jump, self:current_position())
+end
+
+function Compiler:generate_code_from_expression(expression)
+    if expression.tag == "number" then
+        self:add_opcode("push")
+        self:add_opcode(expression.number_value)
+    elseif expression.tag == "variable" then
+        self:assert_variable_is_defined(expression.variable_name)
+        self:add_opcode("load")
+        self:add_opcode(self:variable_index_from_name(expression.variable_name))
+    elseif expression.tag == "binop" then
+        self:generate_code_from_expression(expression.left_operand)
+        self:generate_code_from_expression(expression.right_operand)
+        self:add_opcode(get_opcode_from_binary_operator(expression.operator))
+    elseif expression.tag == "logical_operator" then
+        self:generate_code_from_expression(expression.left_operand)
+        local jump = self:generate_jump(get_jump_opcode_from_logical_operator(expression.operator))
+        self:generate_code_from_expression(expression.right_operand)
+        self:point_jump_to_here(jump)
+    elseif expression.tag == "unary_operator" then
+        self:generate_code_from_expression(expression.operand)
+        self:add_opcode(get_opcode_from_unary_operator(expression.operator))
+    else
+        error("invalid tree")
+    end
 end
 
 function Compiler:generate_code_from_statement(statement)
@@ -483,6 +513,20 @@ local function run(code, memory, stack, trace_enabled)
             pc = pc + 1
             pc = pc + ((stack[top] == 0) and code[pc] or 0)
             top = top - 1
+        elseif current_instruction == "jump_if_zero_or_pop" then
+            pc = pc + 1
+            if stack[top] == 0 then
+                pc = pc + code[pc]
+            else
+                top = top - 1
+            end
+        elseif current_instruction == "jump_if_not_zero_or_pop" then
+            pc = pc + 1
+            if stack[top] ~= 0 then
+                pc = pc + code[pc]
+            else
+                top = top - 1
+            end
         elseif current_instruction == "push" then
             pc = pc + 1
             top = top + 1
