@@ -68,7 +68,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "elseif", "else"}
+local reserved_words = {"return", "if", "elseif", "else", "while"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -215,12 +215,17 @@ local function fold_right_to_if_node(list)
     return node
 end
 
+local function to_while_node(condition, loop_body)
+    return { tag = "while", condition = condition, loop_body = loop_body }
+end
+
 local delimiter = T";"^1
 
 local sequence  = lpeg.V"sequence"
 local block     = lpeg.V"block"
 local statement    = lpeg.V"statement"
 local if_statement = lpeg.V"if_statement"
+local while_statement = lpeg.V"while_statement"
 
 -- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
 --       for the compiler.
@@ -231,11 +236,15 @@ local statements = lpeg.P{"sequence",
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}",
     
-    statement    = block + assignment + return_statement + print_statement + if_statement,
-    if_statement = lpeg.Ct((RW"if" * expression * block)
-                            * (RW"elseif" * expression * block)^0
-                            * (RW"else" * block)^-1
-                   ) / fold_right_to_if_node,
+    statement = block + assignment + return_statement + print_statement + if_statement + while_statement,
+
+    if_statement = lpeg.Ct(
+        (RW"if" * expression * block)
+        * (RW"elseif" * expression * block)^0
+        * (RW"else" * block)^-1
+        ) / fold_right_to_if_node,
+
+    while_statement = RW"while" * expression * block / to_while_node
 }
 --------------------------------------------------------------------------------
 
@@ -344,12 +353,20 @@ function Compiler:generate_jump(jump)
     return self:current_position()
 end
 
+function Compiler:generate_jump_to(position, jump_factory)
+    self:point_jump_to((jump_factory or self.generate_jump)(self), position)
+end
+
 function Compiler:generate_jump_if_zero()
     return self:generate_jump("jump_if_zero")
 end
 
+function Compiler:point_jump_to(jump, position)
+    self.code[jump] = position - jump
+end
+
 function Compiler:point_jump_to_here(jump)
-    self.code[jump] = self:current_position() - jump
+    self:point_jump_to(jump, self:current_position())
 end
 
 function Compiler:generate_code_from_statement(statement)
@@ -372,7 +389,13 @@ function Compiler:generate_code_from_statement(statement)
             self:generate_code_from_statement(statement.else_branch)
             self:point_jump_to_here(jump2)
         end
-
+    elseif statement.tag == "while" then
+        local loop_start = self:current_position()
+        self:generate_code_from_expression(statement.condition)
+        local jump = self:generate_jump_if_zero()
+        self:generate_code_from_statement(statement.loop_body)
+        self:generate_jump_to(loop_start)
+        self:point_jump_to_here(jump)
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("ret")
