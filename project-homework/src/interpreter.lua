@@ -550,6 +550,19 @@ local function run(code, memory, stack, trace_enabled)
             pc = pc + 1
             memory[code[pc]] = stack[top]
             top = top - 1
+        elseif code[pc] == "new_array" then
+            stack[top] = { size = stack[top] }
+        elseif code[pc] == "array_load" then
+            local array = stack[top - 1]
+            local index = stack[top]
+            stack[top - 1] = array[index]
+            top = top - 1
+        elseif code[pc] == "array_store" then
+            local value = stack[top - 2]
+            local array = stack[top - 1]
+            local index = stack[top]
+            array[index] = value
+            top = top - 3
         elseif current_instruction == "eq" then
             stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0
             top = top - 1
@@ -595,7 +608,7 @@ local function run(code, memory, stack, trace_enabled)
         end
 
         -- can only have numbers on the stack
-        assert(top == 0 or top > 0 and type(stack[top]) == "number")
+        assert(top == 0 or top > 0 and (type(stack[top]) == "number" or type(stack[top]) == "table"))
 
         pc = pc + 1
         cycle = cycle + 1
