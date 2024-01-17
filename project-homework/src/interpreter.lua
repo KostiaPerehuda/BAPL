@@ -126,7 +126,7 @@ local function to_binop_node(left_operand, operator, right_operand)
     return { tag = "binop", left_operand = left_operand, operator = operator, right_operand = right_operand }
 end
 
-local to_indexed_variable_node = node("indexed_variable", "variable", "index")
+local to_indexed_node = node("indexed", "variable", "index")
 
 local function fold_left_into_binop_tree(list)
     local tree = list[1]
@@ -185,13 +185,13 @@ local expression = lpeg.P{"expression", expression = logical_or,
       negation  = (negation_operator * negation / apply_unary_operator) + exponent,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
         atom    = (T"(" * expression * T")") + number + indexed_var + new_array,
-    indexed_var = (variable * T"[" * expression * T"]" / to_indexed_variable_node) + variable,
+    indexed_var = (variable * T"[" * expression * T"]" / to_indexed_node) + variable,
      new_array  = RW"new" * T"[" * expression * T"]" / node("new_array", "array_size"),
 }
 
 ---------------------------------- Assignment ----------------------------------
-local assignment_target = (variable * T"[" * expression * T"]" / to_indexed_variable_node) + variable
-local assignment = assignment_target * T"=" * expression / node("assignment", "assignment_target", "expression")
+local assignment_target = (variable * T"[" * expression * T"]" / to_indexed_node) + variable
+local assignment = assignment_target * T"=" * expression / node("assignment", "target", "expression")
 
 ------------------------------- Return Statement -------------------------------
 local return_statement = RW"return" * expression / node("return", "expression")
@@ -368,6 +368,13 @@ function Compiler:generate_code_from_expression(expression)
         self:assert_variable_is_defined(expression.variable_name)
         self:add_opcode("load")
         self:add_opcode(self:variable_index_from_name(expression.variable_name))
+    elseif expression.tag == "indexed" then
+        self:generate_code_from_expression(expression.variable)
+        self:generate_code_from_expression(expression.index)
+        self:add_opcode("array_load")
+    elseif expression.tag == "new_array" then
+        self:generate_code_from_expression(expression.array_size)
+        self:add_opcode("new_array")
     elseif expression.tag == "binop" then
         self:generate_code_from_expression(expression.left_operand)
         self:generate_code_from_expression(expression.right_operand)
@@ -385,11 +392,23 @@ function Compiler:generate_code_from_expression(expression)
     end
 end
 
+function Compiler:generate_code_for_assignment(assignment)
+    self:generate_code_from_expression(assignment.expression)
+    if assignment.target.tag == "variable" then
+        self:add_opcode("store")
+        self:add_opcode(self:variable_index_from_name(assignment.target.variable_name))
+    elseif assignment.target.tag == "indexed" then
+        self:generate_code_from_expression(assignment.target.variable)
+        self:generate_code_from_expression(assignment.target.index)
+        self:add_opcode("array_store")
+    else
+        error("invalid tree for assignment target")
+    end
+end
+
 function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
-        self:generate_code_from_expression(statement.expression)
-        self:add_opcode("store")
-        self:add_opcode(self:variable_index_from_name(statement.assignment_target))
+        self:generate_code_for_assignment(statement)
     elseif statement.tag == "sequence" then
         self:generate_code_from_statement(statement.first)
         self:generate_code_from_statement(statement.second)
@@ -427,7 +446,7 @@ end
 
 local function compile(ast)
     Compiler:generate_code_from_statement(ast)
-    Compiler:generate_code_from_statement(to_return_node(to_number_node(0)))
+    Compiler:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
     return Compiler.code
 end
 
