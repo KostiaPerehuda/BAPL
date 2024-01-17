@@ -1,0 +1,40 @@
+Activity 7 - Garbage Collection
+
+------------------------------------------------------------------------------------------------------------------------
+
+Remember that garbage collection in our language is based on the garbage collection of Lua.
+The garbage collector of Lua doesn't know about our language; it only collects what is garbage for Lua.
+How does that impact our implementation?
+Could we change anything to make it more "garbage-collection" friendly?
+
+------------------------------------------------------------------------------------------------------------------------
+
+There are two memory regions in the current implementation of our language:
+    1. Stack - represented by Lua table with numerical indexes
+    2. Global Memory - this is Lua table representing the mapping between global variables in our program and values
+        they contain. 
+    
+Elements of each of these regions are either numbers or references to arrays (which are also Lua tables).
+
+Garbage Collection: for a heap object to be freed, there must be no reachable references to it.
+
+Global Memory:
+    Once a global variable gets first assigned to, it must never go out of scope thereafter.
+    Reassigning to the global variable will naturally destroy the reference to the object it previously contained.
+
+    Therefore, global memeory implementation is "garbage-collection" friendly.
+
+Stack Memory:
+    Stack automatically grows and shrinks. However, in our current implementation, when we pop the value from the stack,
+    we just decrement the stack size variable, but we do not delete the corresponding key-value pair in the stack.
+    This results in a leftover references to objects that are technically no longer on the stack, which prevents them
+    from being garbage collected.
+
+    Surely, when the stack grows again, these values will be overriden and references released. But not all of them...
+    Obviously, there is at least one point in the program's execution when the stack is at its maximum size. This
+    means that the values being on top of the stack at that point (or at the last of those points if there are more
+    than one) will never be overriden and will never be garbage collected.
+
+    To make our stack more "garbage-collection" friendly, we can explicitly assign nil values to the respective
+    table keys of the popped stack values.
+

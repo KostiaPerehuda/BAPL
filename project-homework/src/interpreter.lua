@@ -505,6 +505,11 @@ local function verify_array_bounds(array, index)
         "ArrayAccessError: index '".. index .. "' is out of bounds of array of size " .. array.size .. "!")
 end
 
+local function drop(stack, top, number_of_values)
+    for i = top - number_of_values + 1, top do stack[i] = nil end
+    return top - number_of_values
+end
+
 local function run(code, memory, stack, trace_enabled)
     local cycle = 1
     local pc = 1
@@ -522,27 +527,27 @@ local function run(code, memory, stack, trace_enabled)
             return stack[top]
         elseif current_instruction == "print" then
             print(stack[top])
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "jump" then
             pc = pc + 1
             pc = pc + code[pc]
         elseif current_instruction == "jump_if_zero" then
             pc = pc + 1
             pc = pc + ((stack[top] == 0) and code[pc] or 0)
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "jump_if_zero_or_pop" then
             pc = pc + 1
             if stack[top] == 0 then
                 pc = pc + code[pc]
             else
-                top = top - 1
+                top = drop(stack, top, 1)
             end
         elseif current_instruction == "jump_if_not_zero_or_pop" then
             pc = pc + 1
             if stack[top] ~= 0 then
                 pc = pc + code[pc]
             else
-                top = top - 1
+                top = drop(stack, top, 1)
             end
         elseif current_instruction == "push" then
             pc = pc + 1
@@ -561,7 +566,7 @@ local function run(code, memory, stack, trace_enabled)
         elseif code[pc] == "store" then
             pc = pc + 1
             memory[code[pc]] = stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif code[pc] == "new_array" then
             local size = stack[top]
             verify_array_size(size)
@@ -573,52 +578,52 @@ local function run(code, memory, stack, trace_enabled)
             local index = stack[top]
             verify_array_bounds(array, index)
             stack[top - 1] = array[index]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif code[pc] == "array_store" then
             local value = stack[top - 2]
             local array = stack[top - 1]
             local index = stack[top]
             verify_array_bounds(array, index)
             array[index] = value
-            top = top - 3
+            top = drop(stack, top, 3)
         elseif current_instruction == "eq" then
             stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "neq" then
             stack[top - 1] = (stack[top - 1] ~= stack[top]) and 1 or 0
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "lte" then
             stack[top - 1] = (stack[top - 1] <= stack[top]) and 1 or 0
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "gte" then
             stack[top - 1] = (stack[top - 1] >= stack[top]) and 1 or 0
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "lt" then
             stack[top - 1] = (stack[top - 1] < stack[top]) and 1 or 0
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "gt" then
             stack[top - 1] = (stack[top - 1] > stack[top]) and 1 or 0
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "not" then
             stack[top] = (stack[top] == 0) and 1 or 0
         elseif current_instruction == "add" then
             stack[top - 1] = stack[top - 1] + stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "sub" then
             stack[top - 1] = stack[top - 1] - stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "mul" then
             stack[top - 1] = stack[top - 1] * stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "div" then
             stack[top - 1] = stack[top - 1] / stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "mod" then
             stack[top - 1] = stack[top - 1] % stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "exp" then
             stack[top - 1] = stack[top - 1] ^ stack[top]
-            top = top - 1
+            top = drop(stack, top, 1)
         elseif current_instruction == "negate" then
             stack[top] = -stack[top]
         else
