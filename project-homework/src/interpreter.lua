@@ -126,8 +126,6 @@ local function to_binop_node(left_operand, operator, right_operand)
     return { tag = "binop", left_operand = left_operand, operator = operator, right_operand = right_operand }
 end
 
-local to_indexed_node = node("indexed", "variable", "index")
-
 local function fold_left_into_binop_tree(list)
     local tree = list[1]
     for i = 2, #list, 2 do tree = to_binop_node(tree, list[i], list[i + 1]) end
@@ -154,6 +152,13 @@ local function fold_left_into_logical(operator)
         for i = 2, #list do tree = to_logical_operator_node(tree, operator, list[i]) end
         return tree
     end
+end
+
+local function fold_left_into_indexed_node(list)
+    local to_indexed_node = node("indexed", "variable", "index")
+    local tree = list[1]
+    for i = 2, #list do tree = to_indexed_node(tree, list[i]) end
+    return tree
 end
 
 local exponential_operator    = T(lpeg.C(lpeg.S("^")))
@@ -185,12 +190,12 @@ local expression = lpeg.P{"expression", expression = logical_or,
       negation  = (negation_operator * negation / apply_unary_operator) + exponent,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
         atom    = (T"(" * expression * T")") + number + indexed_var + new_array,
-    indexed_var = (variable * T"[" * expression * T"]" / to_indexed_node) + variable,
+    indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
      new_array  = RW"new" * T"[" * expression * T"]" / node("new_array", "array_size"),
 }
 
 ---------------------------------- Assignment ----------------------------------
-local assignment_target = (variable * T"[" * expression * T"]" / to_indexed_node) + variable
+local assignment_target = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node
 local assignment = assignment_target * T"=" * expression / node("assignment", "target", "expression")
 
 ------------------------------- Return Statement -------------------------------
@@ -523,7 +528,9 @@ local function verify_array_size(size)
         "ArrayCreationError: an array size must be a positive integer, but got '" .. size .. "'!")
 end
 
-local function verify_array_bounds(array, index)
+local function verify_array_type_and_index_bounds(array, index)
+    assert(is_array(array),
+        "ArrayAccessError: cannot perform array access on a non-array type!")
     assert(math.type(index) == "integer",
         "ArrayAccessError: a non-integer value '".. index .."' cannot be used as an array index!")
     assert(index >= 1 and index <= array.size,
@@ -601,7 +608,7 @@ local function run(code, memory, stack, trace_enabled)
         elseif code[pc] == "array_load" then
             local array = stack[top - 1]
             local index = stack[top]
-            verify_array_bounds(array, index)
+            verify_array_type_and_index_bounds(array, index)
             stack[top - 1] = array[index]
             top = drop(stack, top, 1)
         elseif code[pc] == "array_store" then
