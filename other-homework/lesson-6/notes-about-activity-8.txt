@@ -1,0 +1,10 @@
+Activity 8 - Printing Arrays
+
+------------------------------------------------------------------------------------------------------------------------
+
+Reimplement the print statement from a previous exercise (@ exp) so that it prints arrays in a sensible way.
+
+------------------------------------------------------------------------------------------------------------------------
+
+The format of array prining is the following:
+    "array[<n>]: { <value_1>, <value_2>, ..., <value_n> }"
