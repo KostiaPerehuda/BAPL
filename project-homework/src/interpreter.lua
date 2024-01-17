@@ -493,6 +493,18 @@ end
 
 ------------------------------------ Runner ------------------------------------
 
+local function verify_array_size(size)
+    assert(math.type(size) == "integer" and size >= 1,
+        "ArrayCreationError: an array size must be a positive integer, but got '" .. size .. "'!")
+end
+
+local function verify_array_bounds(array, index)
+    assert(math.type(index) == "integer",
+        "ArrayAccessError: a non-integer value '".. index .."' cannot be used as an array index!")
+    assert(index >= 1 and index <= array.size,
+        "ArrayAccessError: index '".. index .. "' is out of bounds of array of size " .. array.size .. "!")
+end
+
 local function run(code, memory, stack, trace_enabled)
     local cycle = 1
     local pc = 1
@@ -551,16 +563,22 @@ local function run(code, memory, stack, trace_enabled)
             memory[code[pc]] = stack[top]
             top = top - 1
         elseif code[pc] == "new_array" then
-            stack[top] = { size = stack[top] }
+            local size = stack[top]
+            verify_array_size(size)
+            local array = { size = size }
+            for i = 1, size do array[i] = 0 end
+            stack[top] = array
         elseif code[pc] == "array_load" then
             local array = stack[top - 1]
             local index = stack[top]
+            verify_array_bounds(array, index)
             stack[top - 1] = array[index]
             top = top - 1
         elseif code[pc] == "array_store" then
             local value = stack[top - 2]
             local array = stack[top - 1]
             local index = stack[top]
+            verify_array_bounds(array, index)
             array[index] = value
             top = top - 3
         elseif current_instruction == "eq" then

@@ -1,0 +1,13 @@
+Activity 6 - Adding Checks To The Interpreter
+
+------------------------------------------------------------------------------------------------------------------------
+
+Add checks of "index out of range" to the interpreter.
+
+------------------------------------------------------------------------------------------------------------------------
+
+In the language array indexing will start at 1 and end at <array_size>
+Array index must be an integral number.
+
+Also added array size checks for creation of the new arrays. The size must be a positive integer.
+Also added default initialisation of array entries to number '0'.
