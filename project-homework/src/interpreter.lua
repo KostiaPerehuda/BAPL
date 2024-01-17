@@ -28,7 +28,9 @@ local function node(tag, ...)
     local code  = string.format("return function(%s) return {tag = '%s', %s} end", params, tag, fields)
     return assert(load(code))()
 end
+--]=]
 
+---[=[
 local function node(tag, ...)
     local labels = table.pack(...)
     return function(...)
@@ -68,7 +70,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or"}
+local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -124,6 +126,8 @@ local function to_binop_node(left_operand, operator, right_operand)
     return { tag = "binop", left_operand = left_operand, operator = operator, right_operand = right_operand }
 end
 
+local to_indexed_variable_node = node("indexed_variable", "variable", "index")
+
 local function fold_left_into_binop_tree(list)
     local tree = list[1]
     for i = 2, #list, 2 do tree = to_binop_node(tree, list[i], list[i + 1]) end
@@ -169,6 +173,8 @@ local     term    = lpeg.V"term"
 local   negation  = lpeg.V"negation"
 local   exponent  = lpeg.V"exponent"
 local     atom    = lpeg.V"atom"
+local indexed_var = lpeg.V"indexed_var"
+local  new_array  = lpeg.V"new_array"
 
 local expression = lpeg.P{"expression", expression = logical_or,
      logical_or = lpeg.Ct(logical_and * (RW"or" * logical_and)^0) / fold_left_into_logical("or"),
@@ -178,62 +184,42 @@ local expression = lpeg.P{"expression", expression = logical_or,
         term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
       negation  = (negation_operator * negation / apply_unary_operator) + exponent,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
-        atom    = (T"(" * expression * T")") + number + variable,
+        atom    = (T"(" * expression * T")") + number + indexed_var + new_array,
+    indexed_var = (variable * T"[" * expression * T"]" / to_indexed_variable_node) + variable,
+     new_array  = RW"new" * T"[" * expression * T"]" / node("new_array", "array_size"),
 }
 
 ---------------------------------- Assignment ----------------------------------
-local function to_assignment_node(identifier, expression)
-    return { tag = "assignment", assignment_target = identifier, expression = expression }
-end
-
-local assignment = identifier * T"=" * expression / to_assignment_node
+local assignment_target = (variable * T"[" * expression * T"]" / to_indexed_variable_node) + variable
+local assignment = assignment_target * T"=" * expression / node("assignment", "assignment_target", "expression")
 
 ------------------------------- Return Statement -------------------------------
-local function to_return_node(expression)
-    return { tag = "return", expression = expression }
-end
-
-local return_statement = RW"return" * expression / to_return_node
+local return_statement = RW"return" * expression / node("return", "expression")
 
 ------------------------------- Print Statement --------------------------------
-local function to_print_node(expression)
-    return { tag = "print", expression = expression }
-end
-
-local print_statement = T"@" * expression / to_print_node
+local print_statement = T"@" * expression / node("print", "expression")
 
 ----------------------------- Sequences and Blocks -----------------------------
-local function skip_node()
-    return { tag = "skip" }
-end
-
-local function to_sequence_node(first_statement, second_statement)
-    return { tag = "sequence", first = first_statement, second = second_statement }
-end
+local skip_node = node("skip")
+local sequence_node = node("sequence", "first", "second")
 
 local function fold_right_to_sequence_node(statements)
     if #statements == 0 then return skip_node() end
 
     local node = statements[#statements]
     for i = #statements - 1, 1, -1 do
-        node = to_sequence_node(statements[i], node)
+        node = sequence_node(statements[i], node)
     end
     return node
 end
 
-local function to_if_node(condition, if_branch, else_branch)
-    return { tag = "if", condition = condition, if_branch = if_branch, else_branch = else_branch }
-end
+local if_node = node("if", "condition", "if_branch", "else_branch")
 
 local function fold_right_to_if_node(list)
     local last_if_node_index = #list - (#list % 2) - 1
-    local node = to_if_node(list[last_if_node_index], list[last_if_node_index + 1], list[last_if_node_index + 2])
-    for i = last_if_node_index - 1, 1, -2 do node = to_if_node(list[i - 1], list[i], node) end
+    local node = if_node(list[last_if_node_index], list[last_if_node_index + 1], list[last_if_node_index + 2])
+    for i = last_if_node_index - 1, 1, -2 do node = if_node(list[i - 1], list[i], node) end
     return node
-end
-
-local function to_while_node(condition, loop_body)
-    return { tag = "while", condition = condition, loop_body = loop_body }
 end
 
 local delimiter = T";"^1
@@ -261,7 +247,7 @@ local statements = lpeg.P{"sequence",
         * (RW"else" * block)^-1
         ) / fold_right_to_if_node,
 
-    while_statement = RW"while" * expression * block / to_while_node
+    while_statement = RW"while" * expression * block / node("while", "condition", "loop_body")
 }
 --------------------------------------------------------------------------------
 
