@@ -191,7 +191,7 @@ local expression = lpeg.P{"expression", expression = logical_or,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
         atom    = (T"(" * expression * T")") + number + indexed_var + new_array,
     indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
-     new_array  = RW"new" * T"[" * expression * T"]" / node("new_array", "array_size"),
+     new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / node("new_array", "array_size"),
 }
 
 ---------------------------------- Assignment ----------------------------------
@@ -378,8 +378,11 @@ function Compiler:generate_code_from_expression(expression)
         self:generate_code_from_expression(expression.index)
         self:add_opcode("array_load")
     elseif expression.tag == "new_array" then
-        self:generate_code_from_expression(expression.array_size)
+        for i = 1, #expression.array_size do
+            self:generate_code_from_expression(expression.array_size[i])
+        end
         self:add_opcode("new_array")
+        self:add_opcode(#expression.array_size)
     elseif expression.tag == "binop" then
         self:generate_code_from_expression(expression.left_operand)
         self:generate_code_from_expression(expression.right_operand)
@@ -457,47 +460,6 @@ end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
 
------------------------------------- Logger ------------------------------------
-
-local function stack_as_string(stack, stack_top)
-    local stack_as_string = "{ Top --> |"
-    for i = stack_top, 1, -1 do stack_as_string = stack_as_string .. tostring(stack[i]) .. "|" end
-    stack_as_string = stack_as_string .. " <-- Bottom }"
-    return stack_as_string
-end
-
-local function instruction_as_string(code, instruction_pointer)
-    local instruction = code[instruction_pointer]
-    if instruction == "push" then
-        instruction = instruction .. " " .. tostring(code[instruction_pointer + 1])
-    elseif instruction == "load" or instruction == "store" then
-        instruction = instruction .. " '" .. code[instruction_pointer + 1] .. "'"
-    end
-    instruction = "{ " .. instruction .. " }"
-    return instruction
-end
-
-local function log_intrepreter_start(trace_enabled)
-    if not trace_enabled then return end
-    print("Starting Interpreter...")
-end
-
-local function log_intrepreter_state(trace_enabled, cycle, code, pc, stack, stack_top)
-    if not trace_enabled then return end
-    
-    print("Interpreter Cycle: " .. cycle)
-    print("\t" .. "PC = " .. tostring(pc))
-    print("\t" .. "Stack = " .. stack_as_string(stack, stack_top))
-    print("\t" .. "Current Instruction = " .. instruction_as_string(code, pc))
-end
-
-local function log_interpreter_exit(trace_enabled, return_value)
-    if not trace_enabled then return end
-    print("Finished Execution. Returning '" .. return_value .."'")
-end
-
------------------------------------- Runner ------------------------------------
-
 local function is_array(value)
     return type(value) == "table" and value.size ~= nil
 end
@@ -523,6 +485,47 @@ local function value_as_string(value, visited_arrays)
     return array_as_string
 end
 
+local function stack_as_string(stack, stack_top)
+    local stack_as_string = "{ Top --> |"
+    for i = stack_top, 1, -1 do stack_as_string = stack_as_string .. value_as_string(stack[i]) .. "|" end
+    stack_as_string = stack_as_string .. " <-- Bottom }"
+    return stack_as_string
+end
+
+local function instruction_as_string(code, instruction_pointer)
+    local instruction = code[instruction_pointer]
+    if instruction == "push" then
+        instruction = instruction .. " " .. tostring(code[instruction_pointer + 1])
+    elseif instruction == "load" or instruction == "store" then
+        instruction = instruction .. " '" .. code[instruction_pointer + 1] .. "'"
+    end
+    instruction = "{ " .. instruction .. " }"
+    return instruction
+end
+
+------------------------------------ Logger ------------------------------------
+
+local function log_intrepreter_start(trace_enabled)
+    if not trace_enabled then return end
+    print("Starting Interpreter...")
+end
+
+local function log_intrepreter_state(trace_enabled, cycle, code, pc, stack, stack_top)
+    if not trace_enabled then return end
+    
+    print("Interpreter Cycle: " .. cycle)
+    print("\t" .. "PC = " .. tostring(pc))
+    print("\t" .. "Stack = " .. stack_as_string(stack, stack_top))
+    print("\t" .. "Current Instruction = " .. instruction_as_string(code, pc))
+end
+
+local function log_interpreter_exit(trace_enabled, return_value)
+    if not trace_enabled then return end
+    print("Finished Execution. Returning '" .. value_as_string(return_value) .."'")
+end
+
+------------------------------------ Runner ------------------------------------
+
 local function verify_array_size(size)
     assert(math.type(size) == "integer" and size >= 1,
         "ArrayCreationError: an array size must be a positive integer, but got '" .. size .. "'!")
@@ -540,6 +543,19 @@ end
 local function drop(stack, top, number_of_values)
     for i = top - number_of_values + 1, top do stack[i] = nil end
     return top - number_of_values
+end
+
+local function allocate_new_array(sizes, start_at_size)
+    local start_at_size = start_at_size or 1
+    local size = sizes[start_at_size]
+    verify_array_size(size)
+
+    local array = { size = size }
+    for i = 1, size do
+        array[i] = (start_at_size ~= #sizes)
+            and allocate_new_array(sizes, start_at_size + 1) or 0
+    end
+    return array
 end
 
 local function run(code, memory, stack, trace_enabled)
@@ -600,11 +616,11 @@ local function run(code, memory, stack, trace_enabled)
             memory[code[pc]] = stack[top]
             top = drop(stack, top, 1)
         elseif code[pc] == "new_array" then
-            local size = stack[top]
-            verify_array_size(size)
-            local array = { size = size }
-            for i = 1, size do array[i] = 0 end
-            stack[top] = array
+            pc = pc + 1
+            local number_of_dimensions = code[pc]
+            local sizes = table.move(stack, top - number_of_dimensions + 1, top, 1, {})
+            top = drop(stack, top, number_of_dimensions - 1)
+            stack[top] = allocate_new_array(sizes)
         elseif code[pc] == "array_load" then
             local array = stack[top - 1]
             local index = stack[top]
@@ -615,7 +631,7 @@ local function run(code, memory, stack, trace_enabled)
             local value = stack[top - 2]
             local array = stack[top - 1]
             local index = stack[top]
-            verify_array_bounds(array, index)
+            verify_array_type_and_index_bounds(array, index)
             array[index] = value
             top = drop(stack, top, 3)
         elseif current_instruction == "eq" then
