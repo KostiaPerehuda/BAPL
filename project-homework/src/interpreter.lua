@@ -70,7 +70,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new"}
+local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new", "function"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -234,13 +234,19 @@ local block     = lpeg.V"block"
 local statement    = lpeg.V"statement"
 local if_statement = lpeg.V"if_statement"
 local while_statement = lpeg.V"while_statement"
+local function_decl = lpeg.V"function_decl"
 
 -- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
 --       for the compiler.
 --       The parser just drops the block-start and block-end anchors.
 --       Will most probably be changed in the future when we will implement
 --       local variables and stack frames.
-local statements = lpeg.P{"sequence",
+local program = lpeg.P{"function_decl",
+
+    function_decl = (RW"function" * identifier * T"(" * T")" * block) / node("function", "name", "body"),
+
+
+
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}",
     
@@ -256,7 +262,7 @@ local statements = lpeg.P{"sequence",
 }
 --------------------------------------------------------------------------------
 
-local grammar = space * statements * -1
+local grammar = space * program * -1
 
 -------------------------------------------------------- Parser --------------------------------------------------------
 
@@ -452,9 +458,14 @@ function Compiler:generate_code_from_statement(statement)
     end
 end
 
+function Compiler:compile_function(function_node)
+    self:generate_code_from_statement(function_node.body)
+    self:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
+end
+
 local function compile(ast)
-    Compiler:generate_code_from_statement(ast)
-    Compiler:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
+    if ast.name ~= "main" then error("No function named main") end
+    Compiler:compile_function(ast)
     return Compiler.code
 end
 
