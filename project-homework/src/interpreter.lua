@@ -241,11 +241,10 @@ local function_decl = lpeg.V"function_decl"
 --       The parser just drops the block-start and block-end anchors.
 --       Will most probably be changed in the future when we will implement
 --       local variables and stack frames.
-local program = lpeg.P{"function_decl",
+local program = lpeg.P{"functions",
 
+    functions = lpeg.Ct(function_decl^1),
     function_decl = (RW"function" * identifier * T"(" * T")" * block) / node("function", "name", "body"),
-
-
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}",
@@ -467,7 +466,9 @@ function Compiler:compile_function(function_node)
 end
 
 local function compile(ast)
-    Compiler:compile_function(ast)
+    for _, function_node in ipairs(ast) do
+        Compiler:compile_function(function_node)
+    end
     local main = Compiler.functions["main"]
     if not main then error("No function named 'main'") end
     return main.code
@@ -539,6 +540,16 @@ local function log_interpreter_exit(trace_enabled, return_value)
     print("Finished Execution. Returning '" .. value_as_string(return_value) .."'")
 end
 
+local function log_function_start(trace_enabled, function_name)
+    if not trace_enabled then return end
+    print("Calling function '" .. function_name .. "'...")
+end
+
+local function log_function_exit(trace_enabled, function_name)
+    if not trace_enabled then return end
+    print("Returning from function '" .. function_name .."'...")
+end
+
 ------------------------------------ Runner ------------------------------------
 
 local function verify_array_size(size)
@@ -573,12 +584,13 @@ local function allocate_new_array(sizes, start_at_size)
     return array
 end
 
-local function run(code, memory, stack, trace_enabled)
-    local cycle = 1
-    local pc = 1
-    local top = 0
+local function run(code, memory, stack, top, trace_enabled, cycle)
+    trace_enabled = trace_enabled or false
+    cycle = (cycle or 0) + 1
 
-    log_intrepreter_start(trace_enabled)
+    local pc = 1
+
+    log_function_start(trace_enabled, "main")
 
     while true do
         log_intrepreter_state(trace_enabled, cycle, code, pc, stack, top)
@@ -586,8 +598,8 @@ local function run(code, memory, stack, trace_enabled)
         local current_instruction = code[pc]
 
         if current_instruction == "ret" then
-            log_interpreter_exit(trace_enabled, stack[top])
-            return stack[top]
+            log_function_exit(trace_enabled, "main")
+            return top
         elseif current_instruction == "print" then
             print(value_as_string(stack[top]))
             top = drop(stack, top, 1)
@@ -711,8 +723,14 @@ print("Abstract Syntax Tree:", pt(ast), "\n")
 local code = compile(ast)
 print("Compiled Code:", pt(code), "\n")
 
+local trace_enabled = true
+
 local memory = {}
 local stack = {}
-local result = run(code, memory, stack, true)
+local stack_top = 0
+log_intrepreter_start(trace_enabled)
+stack_top = run(code, memory, stack, stack_top, trace_enabled)
+local result = stack[stack_top]
+log_interpreter_exit(trace_enabled, result)
 
 print("Execution Result = " .. tostring(result))
