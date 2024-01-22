@@ -297,7 +297,7 @@ end
 
 ------------------------------------------------------- Compiler -------------------------------------------------------
 
-local Compiler = { code = {}, vars = {}, nvars = 0 }
+local Compiler = { functions = {}, vars = {}, nvars = 0 }
 
 function Compiler:add_opcode(opcode)
     local code = self.code
@@ -459,14 +459,18 @@ function Compiler:generate_code_from_statement(statement)
 end
 
 function Compiler:compile_function(function_node)
+    local code  = {}
+    self.code = code
+    self.functions[function_node.name] = { code = code }
     self:generate_code_from_statement(function_node.body)
     self:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
 end
 
 local function compile(ast)
-    if ast.name ~= "main" then error("No function named main") end
     Compiler:compile_function(ast)
-    return Compiler.code
+    local main = Compiler.functions["main"]
+    if not main then error("No function named 'main'") end
+    return main.code
 end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
