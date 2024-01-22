@@ -1,0 +1,20 @@
+Activity 3 - Recursion
+
+------------------------------------------------------------------------------------------------------------------------
+
+With the current implementation, do you think our language will support recursive functions? What about indirect recursion?
+
+------------------------------------------------------------------------------------------------------------------------
+
+This depends on how we implement compilation of a function call. So far we haven't implemented this, and I see no
+reasons to believe that recursion will not work.
+All of it boils down to how we implement function calls and function linking, and also depends on whether we want to
+check if the function exists or not at compile time or at runtime.
+    For the first part, we can implement multiple things. We can have "named" function calls by implementing instruction
+    "call <function>" where we specify what function to call in the instruction itself. Or we can implement a function
+    call as an operator applied to an expression, here the callee will be determined by the value on the top of the
+    stack.
+    As for checking whether a function is defined or not at compile time, then in order to support recursion we can implement a two pass compiler: in the first pass we only proccess the function decalrations and gather the list of
+    all avaiable functions, in the second pass we compile the functions and perform all the neccessary validations.
+
+Overall, I think our implementation will support recursion. 
