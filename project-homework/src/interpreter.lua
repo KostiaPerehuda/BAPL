@@ -458,6 +458,9 @@ function Compiler:generate_code_from_statement(statement)
 end
 
 function Compiler:compile_function(function_node)
+    if self.functions[function_node.name] then
+        error("Compilation Error: Function '" .. function_node.name .. "' has been defined more than once!")
+    end
     local code  = {}
     self.code = code
     self.functions[function_node.name] = { code = code }
