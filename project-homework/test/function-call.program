@@ -1,7 +1,9 @@
 function foo() {
+    @33;
     return 33;
 }
 
 function main() {
+    foo();
     return 20 + foo();
 }

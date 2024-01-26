@@ -237,6 +237,7 @@ local statement    = lpeg.V"statement"
 local if_statement = lpeg.V"if_statement"
 local while_statement = lpeg.V"while_statement"
 local function_decl = lpeg.V"function_decl"
+local call_statement = lpeg.V"call_statement"
 
 -- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
 --       for the compiler.
@@ -251,7 +252,13 @@ local program = lpeg.P{"functions",
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}",
     
-    statement = block + assignment + return_statement + print_statement + if_statement + while_statement,
+    statement = block
+                + assignment
+                + call_statement
+                + return_statement
+                + print_statement
+                + if_statement
+                + while_statement,
 
     if_statement = lpeg.Ct(
         (RW"if" * expression * block)
@@ -259,7 +266,9 @@ local program = lpeg.P{"functions",
         * (RW"else" * block)^-1
         ) / fold_right_to_if_node,
 
-    while_statement = RW"while" * expression * block / node("while", "condition", "loop_body")
+    while_statement = RW"while" * expression * block / node("while", "condition", "loop_body"),
+
+    call_statement = identifier * T"(" * T")" / node("call", "call_site_name"),
 }
 --------------------------------------------------------------------------------
 
@@ -375,9 +384,9 @@ function Compiler:point_jump_to_here(jump)
     self:point_jump_to(jump, self:current_position())
 end
 
-function Compiler:generate_code_from_call_expression(expression)
-    local call_site = self.functions[expression.call_site_name]
-    if not call_site then error("Compilation Error: undefined function '" .. expression.call_site_name .. "'!") end
+function Compiler:generate_code_from_call(call_node)
+    local call_site = self.functions[call_node.call_site_name]
+    if not call_site then error("Compilation Error: undefined function '" .. call_node.call_site_name .. "'!") end
     self:add_opcode("call")
     self:add_opcode(call_site)
 end
@@ -387,7 +396,7 @@ function Compiler:generate_code_from_expression(expression)
         self:add_opcode("push")
         self:add_opcode(expression.number_value)
     elseif expression.tag == "call" then
-        self:generate_code_from_call_expression(expression)
+        self:generate_code_from_call(expression)
     elseif expression.tag == "variable" then
         self:assert_variable_is_defined(expression.variable_name)
         self:add_opcode("load")
@@ -419,7 +428,7 @@ function Compiler:generate_code_from_expression(expression)
     end
 end
 
-function Compiler:generate_code_for_assignment(assignment)
+function Compiler:generate_code_from_assignment(assignment)
     self:generate_code_from_expression(assignment.expression)
     if assignment.target.tag == "variable" then
         self:add_opcode("store")
@@ -435,7 +444,11 @@ end
 
 function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
-        self:generate_code_for_assignment(statement)
+        self:generate_code_from_assignment(statement)
+    elseif statement.tag == "call" then
+        self:generate_code_from_call(statement)
+        self:add_opcode("pop")
+        self:add_opcode(1)
     elseif statement.tag == "sequence" then
         self:generate_code_from_statement(statement.first)
         self:generate_code_from_statement(statement.second)
@@ -486,8 +499,6 @@ function Compiler:compile_function(function_node)
     self.functions[function_node.name] = { code = code, name = function_node.name }
     self:generate_code_from_statement(function_node.body)
     self:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
-
-    print("function_node", pt(function_node))
 end
 
 local function compile(ast)
@@ -659,6 +670,9 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
             pc = pc + 1
             top = top + 1
             stack[top] = code[pc]
+        elseif current_instruction == "pop" then
+            pc = pc + 1
+            top = drop(stack, top, code[pc])
         elseif code[pc] == "load" then
             pc = pc + 1
             top = top + 1
