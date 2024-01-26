@@ -236,7 +236,9 @@ local block     = lpeg.V"block"
 local statement    = lpeg.V"statement"
 local if_statement = lpeg.V"if_statement"
 local while_statement = lpeg.V"while_statement"
+local function_header = lpeg.V"function_header"
 local function_decl = lpeg.V"function_decl"
+local function_def = lpeg.V"function_def"
 local call_statement = lpeg.V"call_statement"
 
 -- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
@@ -246,8 +248,11 @@ local call_statement = lpeg.V"call_statement"
 --       local variables and stack frames.
 local program = lpeg.P{"functions",
 
-    functions = lpeg.Ct(function_decl^1),
-    function_decl = (RW"function" * identifier * T"(" * T")" * block) / node("function", "name", "body"),
+    functions = lpeg.Ct((function_decl + function_def)^0),
+
+    function_header = RW"function" * identifier * T"(" * T")",
+    function_decl = (function_header * T";") / node("function", "name"),
+    function_def = (function_header * block) / node("function", "name", "body"),
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}",
@@ -484,19 +489,30 @@ function Compiler:generate_code_from_statement(statement)
     end
 end
 
-function Compiler:compile_function(function_node)
+function Compiler:declare_function(function_node)
     
-    if self.functions[function_node.name] then
+    if self.functions[function_node.name] then return end
+
+    if self.vars[function_node.name] then
+        error("Compilation Error: Function '" .. function_node.name .. "' cannot be declared, \
+            \rbecause there already exists a global variable with the same name!")
+    end
+    self.functions[function_node.name] = { name = function_node.name }
+end
+
+function Compiler:compile_function(function_node)
+
+    self:declare_function(function_node)
+    
+    if not function_node.body then return end
+    
+    if self.functions[function_node.name].code then
         error("Compilation Error: Function '" .. function_node.name .. "' has been defined more than once!")
     end
 
-    if self.vars[function_node.name] then
-        error("Compilation Error: Function '" .. function_node.name .. "' cannot be defined, \
-            \rbecause there already exists a global variable with the same name!")
-    end
     local code  = {}
     self.code = code
-    self.functions[function_node.name] = { code = code, name = function_node.name }
+    self.functions[function_node.name].code = code
     self:generate_code_from_statement(function_node.body)
     self:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
 end

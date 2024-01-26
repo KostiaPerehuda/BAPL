@@ -1,9 +1,13 @@
-function foo() {
-    @33;
-    return 33;
-}
+function foo();
+
+
 
 function main() {
     foo();
     return 20 + foo();
+}
+
+function foo() {
+    @33;
+    return 33;
 }
