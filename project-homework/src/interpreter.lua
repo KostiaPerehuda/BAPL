@@ -255,7 +255,7 @@ local program = lpeg.P{"functions",
     function_def = (function_header * block) / node("function", "name", "body"),
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
-    block    = T"{" * sequence * T"}",
+    block    = T"{" * sequence * T"}" / node("block", "body"),
     
     statement = block
                 + assignment
@@ -433,6 +433,10 @@ function Compiler:generate_code_from_expression(expression)
     end
 end
 
+function Compiler:generate_code_from_block(block)
+    self:generate_code_from_statement(block.body)
+end
+
 function Compiler:generate_code_from_assignment(assignment)
     self:generate_code_from_expression(assignment.expression)
     if assignment.target.tag == "variable" then
@@ -450,6 +454,8 @@ end
 function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
+    elseif statement.tag == "block" then
+        self:generate_code_from_block(statement)
     elseif statement.tag == "call" then
         self:generate_code_from_call(statement)
         self:add_opcode("pop")
