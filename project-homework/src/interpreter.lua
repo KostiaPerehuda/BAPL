@@ -180,6 +180,7 @@ local   exponent  = lpeg.V"exponent"
 local     atom    = lpeg.V"atom"
 local indexed_var = lpeg.V"indexed_var"
 local  new_array  = lpeg.V"new_array"
+local function_call = lpeg.V"function_call"
 
 local expression = lpeg.P{"expression", expression = logical_or,
      logical_or = lpeg.Ct(logical_and * (RW"or" * logical_and)^0) / fold_left_into_logical("or"),
@@ -189,9 +190,10 @@ local expression = lpeg.P{"expression", expression = logical_or,
         term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
       negation  = (negation_operator * negation / apply_unary_operator) + exponent,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
-        atom    = (T"(" * expression * T")") + number + indexed_var + new_array,
-    indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
+        atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var, 
      new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / node("new_array", "array_size"),
+    function_call = identifier * T"(" * T")" / node("call", "call_site_name"),
+    indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
 }
 
 ---------------------------------- Assignment ----------------------------------
@@ -370,10 +372,19 @@ function Compiler:point_jump_to_here(jump)
     self:point_jump_to(jump, self:current_position())
 end
 
+function Compiler:generate_code_from_call_expression(expression)
+    local call_site = self.functions[expression.call_site_name]
+    if not call_site then error("Compilation Error: undefined function '" .. expression.call_site_name .. "'!") end
+    self:add_opcode("call")
+    self:add_opcode(call_site)
+end
+
 function Compiler:generate_code_from_expression(expression)
     if expression.tag == "number" then
         self:add_opcode("push")
         self:add_opcode(expression.number_value)
+    elseif expression.tag == "call" then
+        self:generate_code_from_call_expression(expression)
     elseif expression.tag == "variable" then
         self:assert_variable_is_defined(expression.variable_name)
         self:add_opcode("load")
@@ -401,7 +412,7 @@ function Compiler:generate_code_from_expression(expression)
         self:generate_code_from_expression(expression.operand)
         self:add_opcode(get_opcode_from_unary_operator(expression.operator))
     else
-        error("invalid tree")
+        error("invalid expression tree: " .. pt(expression))
     end
 end
 
@@ -458,14 +469,17 @@ function Compiler:generate_code_from_statement(statement)
 end
 
 function Compiler:compile_function(function_node)
+    
     if self.functions[function_node.name] then
         error("Compilation Error: Function '" .. function_node.name .. "' has been defined more than once!")
     end
     local code  = {}
     self.code = code
-    self.functions[function_node.name] = { code = code }
+    self.functions[function_node.name] = { code = code, name = function_node.name }
     self:generate_code_from_statement(function_node.body)
     self:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
+
+    print("function_node", pt(function_node))
 end
 
 local function compile(ast)
@@ -474,7 +488,7 @@ local function compile(ast)
     end
     local main = Compiler.functions["main"]
     if not main then error("No function named 'main'") end
-    return main.code
+    return main
 end
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
@@ -587,13 +601,15 @@ local function allocate_new_array(sizes, start_at_size)
     return array
 end
 
-local function run(code, memory, stack, top, trace_enabled, cycle)
+local function run(call_site, memory, stack, top, trace_enabled, cycle)
+
     trace_enabled = trace_enabled or false
     cycle = (cycle or 0) + 1
 
+    local code = call_site.code
     local pc = 1
 
-    log_function_start(trace_enabled, "main")
+    log_function_start(trace_enabled, call_site.name)
 
     while true do
         log_intrepreter_state(trace_enabled, cycle, code, pc, stack, top)
@@ -601,8 +617,12 @@ local function run(code, memory, stack, top, trace_enabled, cycle)
         local current_instruction = code[pc]
 
         if current_instruction == "ret" then
-            log_function_exit(trace_enabled, "main")
-            return top
+            log_function_exit(trace_enabled, call_site.name)
+            return top, cycle
+        elseif current_instruction == "call" then
+            pc = pc + 1
+            local call_site = code[pc]
+            top, cycle = run(call_site, memory, stack, top, trace_enabled, cycle)
         elseif current_instruction == "print" then
             print(value_as_string(stack[top]))
             top = drop(stack, top, 1)
@@ -723,8 +743,8 @@ local source = io.read("a")
 local ast = parse(source)
 print("Abstract Syntax Tree:", pt(ast), "\n")
 
-local code = compile(ast)
-print("Compiled Code:", pt(code), "\n")
+local main_function = compile(ast)
+print("Compiled Code:", pt(main_function), "\n")
 
 local trace_enabled = true
 
@@ -732,7 +752,7 @@ local memory = {}
 local stack = {}
 local stack_top = 0
 log_intrepreter_start(trace_enabled)
-stack_top = run(code, memory, stack, stack_top, trace_enabled)
+stack_top = run(main_function, memory, stack, stack_top, trace_enabled)
 local result = stack[stack_top]
 log_interpreter_exit(trace_enabled, result)
 
