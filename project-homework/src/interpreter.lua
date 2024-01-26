@@ -335,6 +335,9 @@ end
 function Compiler:variable_index_from_name(variable_name)
     local num = self.vars[variable_name]
     if not num then
+        assert(not self.functions[variable_name],
+                "Compiler Error: Cannot use '" .. variable_name .. "' as a variable, "
+                .. "because a function with the same name is already defined!")
         num = self.nvars + 1
         self.nvars = num
         self.vars[variable_name] = num
@@ -472,6 +475,11 @@ function Compiler:compile_function(function_node)
     
     if self.functions[function_node.name] then
         error("Compilation Error: Function '" .. function_node.name .. "' has been defined more than once!")
+    end
+
+    if self.vars[function_node.name] then
+        error("Compilation Error: Function '" .. function_node.name .. "' cannot be defined, \
+            \rbecause there already exists a global variable with the same name!")
     end
     local code  = {}
     self.code = code
@@ -728,7 +736,7 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
             error("unknown instruction: '" .. current_instruction .. "'")
         end
 
-        -- can only have numbers on the stack
+        -- can only have numbers or arrays on the stack
         assert(top == 0 or top > 0 and (type(stack[top]) == "number" or type(stack[top]) == "table"))
 
         pc = pc + 1
