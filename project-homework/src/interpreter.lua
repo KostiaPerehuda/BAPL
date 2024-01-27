@@ -462,11 +462,20 @@ end
 
 function Compiler:verify_no_local_variable_redeclaration_in_current_block(old_level)
     local locals = self.locals
+    local parameters = self.parameters
     for i = old_level, #locals do
+        for j = 1, #parameters do
+            if locals[i] == parameters[j] then
+                error("Compilation Error: Local variable '" .. locals[i] .. "' in function '"
+                    .. self.current_function_name
+                        .. "' attempts to redefine the formal parameter with the same name!")
+            end
+        end
+
         for j = i + 1, #locals do
             if locals[i] == locals[j] then
                 error("Compilation Error: Local variable '" .. locals[i]
-                        .. "' has been declared more than once in the same block!")
+                        .. "' has been defined more than once in the same block!")
             end
         end
     end
@@ -555,14 +564,33 @@ function Compiler:generate_code_from_statement(statement)
 end
 
 function Compiler:declare_function(function_node)
-    
-    if self.functions[function_node.name] then return end
 
-    if self.globals[function_node.name] then
-        error("Compilation Error: Function '" .. function_node.name .. "' cannot be declared, \
+    local name = function_node.name
+    local parameters = function_node.parameters
+
+    for i = 1, #parameters do
+        for j = i + 1, #parameters do
+            if parameters[i] == parameters[j] then
+                error("Compilation Error: Function '" .. name .. "' contains more than one parameter named '"
+                        .. parameters[i] .. "'!")
+            end
+        end
+    end
+    
+    if self.functions[name] then
+        if #self.functions[name].parameters ~= #parameters then
+            error("Compilation Error: Function '" .. name .. "' has already been declared with different "
+                    .. "number of parameters!")
+        end
+        return
+    end
+
+    if self.globals[name] then
+        error("Compilation Error: Function '" .. name .. "' cannot be declared, \
             \rbecause there already exists a global variable with the same name!")
     end
-    self.functions[function_node.name] = { name = function_node.name }
+
+    self.functions[name] = { name = name, parameters = parameters }
 end
 
 function Compiler:compile_function(function_node)
@@ -578,6 +606,8 @@ function Compiler:compile_function(function_node)
     local code  = {}
     self.code = code
     self.functions[function_node.name].code = code
+    self.parameters = self.functions[function_node.name].parameters
+    self.current_function_name = function_node.name
     self:generate_code_from_statement(function_node.body)
     self:generate_code_from_statement(node("return", "expression")(to_number_node(0)))
 end
