@@ -631,6 +631,7 @@ local function compile(ast)
     end
     local main = Compiler.functions["main"]
     if not main then error("No function named 'main'") end
+    if #main.parameters > 0 then error("Function 'main' cannot have any parameters!") end
     return main
 end
 
