@@ -1,0 +1,17 @@
+Introduce multi-pass compilation for functions
+
+------------------------------------------------------------------------------------------------------------------------
+
+Compilation is now split in three stages:
+    1. Every function is declared
+    2. Every function is compiled
+    3. Verify every declared function is also defined
+
+This preserves the opportunity to check at compile time if the function is declared,
+but eliminates the need for forward declarations.
+Forward declarations are still present as a feature, to comply with the exercises specification.
+Forward declarations, however, introduce a possiblity for a function being declared but never defined,
+therefore introducing the possibility of calling a function that has no asscoiated code.
+
+I've added a check to verify at compile time that every declared function is also defined. Moreover,
+runtime can now signal if a call-site has no associated code.

@@ -526,7 +526,14 @@ end
 
 local function compile(ast)
     for _, function_node in ipairs(ast) do
+        Compiler:declare_function(function_node)
+    end
+    for _, function_node in ipairs(ast) do
         Compiler:compile_function(function_node)
+    end
+    for _, call_site in ipairs(Compiler.functions) do
+        assert(call_site.code,
+                "Compilation Error: function '" .. call_site.name .. "' has been declared but not defined!")
     end
     local main = Compiler.functions["main"]
     if not main then error("No function named 'main'") end
@@ -643,12 +650,20 @@ local function allocate_new_array(sizes, start_at_size)
     return array
 end
 
+local function verify_call_site_can_be_executed(call_site)
+    assert(call_site.code,
+        "Runtime Error: function  '" .. call_site.name .. "' cannot be executed, as it has no associated code!")
+end
+
 local function run(call_site, memory, stack, top, trace_enabled, cycle)
+    verify_call_site_can_be_executed(call_site)
+
 
     trace_enabled = trace_enabled or false
     cycle = (cycle or 0) + 1
 
     local code = call_site.code
+    
     local pc = 1
 
     log_function_start(trace_enabled, call_site.name)
