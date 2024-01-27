@@ -1,0 +1,10 @@
+function main() {
+    {
+        var a;
+        {
+            var a;
+        }
+    };
+    var b;
+    var b;
+}

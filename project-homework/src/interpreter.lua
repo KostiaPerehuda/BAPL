@@ -454,11 +454,24 @@ function Compiler:generate_code_from_expression(expression)
     end
 end
 
+function Compiler:verify_no_local_variable_redeclaration_in_current_block(old_level)
+    local locals = self.locals
+    for i = old_level, #locals do
+        for j = i + 1, #locals do
+            if locals[i] == locals[j] then
+                error("Compilation Error: Local variable '" .. locals[i]
+                        .. "' has been declared more than once in the same block!")
+            end
+        end
+    end
+end
+
 function Compiler:generate_code_from_block(block)
     local old_level = #self.locals
     self:generate_code_from_statement(block.body)
     local diff = #self.locals - old_level
     if diff > 0 then
+        self:verify_no_local_variable_redeclaration_in_current_block(old_level)
         for i = 1, diff do
             table.remove(self.locals)
         end
