@@ -380,6 +380,12 @@ function Compiler:find_local(name)
             return i
         end
     end
+    local parameters = self.parameters
+    for i = 1, #parameters do
+        if name == parameters[i] then
+            return i - #parameters
+        end
+    end
     return nil
 end
 
@@ -418,6 +424,11 @@ function Compiler:generate_code_from_call(call_node)
         error("Compilation Error: function '" .. call_site.name .. "' expects "
                 .. #call_site.parameters .. " argument(s), but " .. #call_node.arguments .. " were given!")
     end
+
+    for _, argument in ipairs(call_node.arguments) do
+        self:generate_code_from_expression(argument)
+    end
+
     self:add_opcode("call")
     self:add_opcode(call_site)
 end
@@ -558,7 +569,7 @@ function Compiler:generate_code_from_statement(statement)
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("ret")
-        self:add_opcode(#self.locals)
+        self:add_opcode(#self.locals + #self.parameters)
     elseif statement.tag == "print" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("print")

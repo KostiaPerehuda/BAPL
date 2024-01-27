@@ -1,8 +1,8 @@
 function main() {
-    return 2;
+    return foo(1, 2);
 }
 
-function main2() {
-    return 22;
+function foo(x, y) {
+    return x + y;
 }
 
