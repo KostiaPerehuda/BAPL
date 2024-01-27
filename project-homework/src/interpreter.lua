@@ -70,7 +70,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new", "function"}
+local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new", "function", "var"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -196,6 +196,9 @@ local expression = lpeg.P{"expression", expression = logical_or,
     indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
 }
 
+-------------------------------- Local Variables -------------------------------
+local local_var = RW"var" * identifier * T"=" * expression / node("local_variable", "name", "initial_value")
+
 ---------------------------------- Assignment ----------------------------------
 local assignment_target = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node
 local assignment = assignment_target * T"=" * expression / node("assignment", "target", "expression")
@@ -263,7 +266,8 @@ local program = lpeg.P{"functions",
                 + return_statement
                 + print_statement
                 + if_statement
-                + while_statement,
+                + while_statement
+                + local_var,
 
     if_statement = lpeg.Ct(
         (RW"if" * expression * block)
@@ -312,7 +316,7 @@ end
 
 ------------------------------------------------------- Compiler -------------------------------------------------------
 
-local Compiler = { functions = {}, vars = {}, nvars = 0 }
+local Compiler = { functions = {}, globals = {}, nglobals = 0, locals = {} }
 
 function Compiler:add_opcode(opcode)
     local code = self.code
@@ -347,20 +351,20 @@ local function get_jump_opcode_from_logical_operator(operator)
 end
 
 function Compiler:variable_index_from_name(variable_name)
-    local num = self.vars[variable_name]
+    local num = self.globals[variable_name]
     if not num then
         assert(not self.functions[variable_name],
                 "Compiler Error: Cannot use '" .. variable_name .. "' as a variable, "
                 .. "because a function with the same name is already defined!")
-        num = self.nvars + 1
-        self.nvars = num
-        self.vars[variable_name] = num
+        num = self.nglobals + 1
+        self.nglobals = num
+        self.globals[variable_name] = num
     end
     return num
 end
 
 function Compiler:assert_variable_is_defined(variable_name)
-    assert(self.vars[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
+    assert(self.globals[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
 end
 
 function Compiler:current_position()
@@ -435,7 +439,16 @@ function Compiler:generate_code_from_expression(expression)
 end
 
 function Compiler:generate_code_from_block(block)
+    local old_level = #self.locals
     self:generate_code_from_statement(block.body)
+    local diff = #self.locals - old_level
+    if diff > 0 then
+        for i = 1, diff do
+            table.remove(self.locals)
+        end
+        self:add_opcode("pop")
+        self:add_opcode(diff)
+    end
 end
 
 function Compiler:generate_code_from_assignment(assignment)
@@ -455,6 +468,9 @@ end
 function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
+    elseif statement.tag == "local_variable" then
+        self:generate_code_from_expression(statement.initial_value)
+        self.locals[#self.locals + 1] = statement.name
     elseif statement.tag == "block" then
         self:generate_code_from_block(statement)
     elseif statement.tag == "call" then
@@ -486,6 +502,7 @@ function Compiler:generate_code_from_statement(statement)
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("ret")
+        self:add_opcode(#self.locals)
     elseif statement.tag == "print" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("print")
@@ -500,7 +517,7 @@ function Compiler:declare_function(function_node)
     
     if self.functions[function_node.name] then return end
 
-    if self.vars[function_node.name] then
+    if self.globals[function_node.name] then
         error("Compilation Error: Function '" .. function_node.name .. "' cannot be declared, \
             \rbecause there already exists a global variable with the same name!")
     end
@@ -580,6 +597,8 @@ local function instruction_as_string(code, instruction_pointer)
         instruction = instruction .. " " .. tostring(code[instruction_pointer + 1])
     elseif instruction == "load" or instruction == "store" then
         instruction = instruction .. " '" .. code[instruction_pointer + 1] .. "'"
+    elseif instruction == "call" then
+        instruction = instruction .. " '" .. code[instruction_pointer + 1].name .. "'"
     end
     instruction = "{ " .. instruction .. " }"
     return instruction
@@ -675,6 +694,11 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
 
         if current_instruction == "ret" then
             log_function_exit(trace_enabled, call_site.name)
+
+            local n = code[pc + 1]
+            stack[top - n] = stack[top]
+            top = drop(stack, top, n)
+
             return top, cycle
         elseif current_instruction == "call" then
             pc = pc + 1
@@ -721,7 +745,7 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
             --           to verify this at runtime.
             -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
             stack[top] = memory[code[pc]]
-            assert(stack[top] ~= nil, "Runtime Error: Attempt to reference unitialized variable '" .. code[pc] .. "'!")
+            assert(stack[top] ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
         elseif code[pc] == "store" then
             pc = pc + 1
             memory[code[pc]] = stack[top]
