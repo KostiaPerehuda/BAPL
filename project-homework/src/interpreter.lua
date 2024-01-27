@@ -197,7 +197,7 @@ local expression = lpeg.P{"expression", expression = logical_or,
 }
 
 -------------------------------- Local Variables -------------------------------
-local local_var = RW"var" * identifier * T"=" * expression / node("local_variable", "name", "initial_value")
+local local_var = RW"var" * identifier * (T"=" * expression)^-1 / node("local_variable", "name", "initial_value")
 
 ---------------------------------- Assignment ----------------------------------
 local assignment_target = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node
@@ -469,7 +469,7 @@ function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
     elseif statement.tag == "local_variable" then
-        self:generate_code_from_expression(statement.initial_value)
+        self:generate_code_from_expression(statement.initial_value or to_number_node(0))
         self.locals[#self.locals + 1] = statement.name
     elseif statement.tag == "block" then
         self:generate_code_from_block(statement)
