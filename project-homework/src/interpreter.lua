@@ -411,7 +411,13 @@ end
 
 function Compiler:generate_code_from_call(call_node)
     local call_site = self.functions[call_node.call_site_name]
-    if not call_site then error("Compilation Error: undefined function '" .. call_node.call_site_name .. "'!") end
+    if not call_site then
+        error("Compilation Error: undefined function '" .. call_node.call_site_name .. "'!")
+    end
+    if #call_site.parameters ~= #call_node.arguments then
+        error("Compilation Error: function '" .. call_site.name .. "' expects "
+                .. #call_site.parameters .. " argument(s), but " .. #call_node.arguments .. " were given!")
+    end
     self:add_opcode("call")
     self:add_opcode(call_site)
 end
