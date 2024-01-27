@@ -1,5 +1,11 @@
 function main() {
-    {var a};
-    var b = 20;
-    return 30;
+    {
+        var a = 10;
+        {
+            var b;
+            var c = a + b;
+            c = c + a;
+            return c;
+        };
+    };
 }

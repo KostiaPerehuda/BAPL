@@ -350,7 +350,7 @@ local function get_jump_opcode_from_logical_operator(operator)
     return jump_opcode_from_logical_operator[operator] or error("invalid tree")
 end
 
-function Compiler:variable_index_from_name(variable_name)
+function Compiler:global_variable_index_from_name(variable_name)
     local num = self.globals[variable_name]
     if not num then
         assert(not self.functions[variable_name],
@@ -365,6 +365,16 @@ end
 
 function Compiler:assert_variable_is_defined(variable_name)
     assert(self.globals[variable_name], "Varible '" .. variable_name .. "' is referenced before being defined!")
+end
+
+function Compiler:find_local(name)
+    local locals = self.locals
+    for i = #locals, 1, -1 do
+        if name == locals[i] then
+            return i
+        end
+    end
+    return nil
 end
 
 function Compiler:current_position()
@@ -409,8 +419,14 @@ function Compiler:generate_code_from_expression(expression)
     elseif expression.tag == "variable" then
         -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
         -- self:assert_variable_is_defined(expression.variable_name)
-        self:add_opcode("load")
-        self:add_opcode(self:variable_index_from_name(expression.variable_name))
+        local local_index = self:find_local(expression.variable_name)
+        if local_index then
+            self:add_opcode("load_local")
+            self:add_opcode(local_index)
+        else
+            self:add_opcode("load")
+            self:add_opcode(self:global_variable_index_from_name(expression.variable_name))
+        end
     elseif expression.tag == "indexed" then
         self:generate_code_from_expression(expression.variable)
         self:generate_code_from_expression(expression.index)
@@ -454,8 +470,14 @@ end
 function Compiler:generate_code_from_assignment(assignment)
     self:generate_code_from_expression(assignment.expression)
     if assignment.target.tag == "variable" then
-        self:add_opcode("store")
-        self:add_opcode(self:variable_index_from_name(assignment.target.variable_name))
+        local local_index = self:find_local(assignment.target.variable_name)
+        if local_index then
+            self:add_opcode("store_local")
+            self:add_opcode(local_index)
+        else
+            self:add_opcode("store")
+            self:add_opcode(self:global_variable_index_from_name(assignment.target.variable_name))
+        end
     elseif assignment.target.tag == "indexed" then
         self:generate_code_from_expression(assignment.target.variable)
         self:generate_code_from_expression(assignment.target.index)
@@ -682,7 +704,7 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
     cycle = (cycle or 0) + 1
 
     local code = call_site.code
-    
+    local base = top
     local pc = 1
 
     log_function_start(trace_enabled, call_site.name)
@@ -735,6 +757,10 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
         elseif current_instruction == "pop" then
             pc = pc + 1
             top = drop(stack, top, code[pc])
+        elseif code[pc] == "load_local" then
+            pc = pc + 1
+            top = top + 1
+            stack[top] = stack[base + code[pc]]
         elseif code[pc] == "load" then
             pc = pc + 1
             top = top + 1
@@ -746,6 +772,10 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
             -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
             stack[top] = memory[code[pc]]
             assert(stack[top] ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
+        elseif code[pc] == "store_local" then
+            pc = pc + 1
+            stack[base + code[pc]] = stack[top]
+            top = drop(stack, top, 1)
         elseif code[pc] == "store" then
             pc = pc + 1
             memory[code[pc]] = stack[top]
