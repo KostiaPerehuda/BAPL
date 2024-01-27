@@ -181,6 +181,7 @@ local     atom    = lpeg.V"atom"
 local indexed_var = lpeg.V"indexed_var"
 local  new_array  = lpeg.V"new_array"
 local function_call = lpeg.V"function_call"
+local arguments = lpeg.V"arguments"
 
 local expression = lpeg.P{"expression", expression = logical_or,
      logical_or = lpeg.Ct(logical_and * (RW"or" * logical_and)^0) / fold_left_into_logical("or"),
@@ -192,7 +193,8 @@ local expression = lpeg.P{"expression", expression = logical_or,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
         atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var, 
      new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / node("new_array", "array_size"),
-    function_call = identifier * T"(" * T")" / node("call", "call_site_name"),
+    function_call = identifier * T"(" * arguments * T")" / node("call", "call_site_name", "arguments"),
+    arguments = lpeg.Ct((expression * (T"," * expression)^0)^-1),
     indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
 }
 
@@ -243,6 +245,7 @@ local function_header = lpeg.V"function_header"
 local function_decl = lpeg.V"function_decl"
 local function_def = lpeg.V"function_def"
 local call_statement = lpeg.V"call_statement"
+local function_params = lpeg.V"function_params"
 
 -- TODO: a "block" is a purely syntactic feature for now, it has no meaning,
 --       for the compiler.
@@ -253,9 +256,11 @@ local program = lpeg.P{"functions",
 
     functions = lpeg.Ct((function_decl + function_def)^0),
 
-    function_header = RW"function" * identifier * T"(" * T")",
-    function_decl = (function_header * T";") / node("function", "name"),
-    function_def = (function_header * block) / node("function", "name", "body"),
+    function_decl = (function_header * T";") / node("function", "name", "parameters"),
+    function_def = (function_header * block) / node("function", "name", "parameters", "body"),
+
+    function_header = RW"function" * identifier * T"(" * function_params * T")",
+    function_params = lpeg.Ct((identifier * (T"," * identifier)^0)^-1),
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}" / node("block", "body"),
@@ -277,7 +282,8 @@ local program = lpeg.P{"functions",
 
     while_statement = RW"while" * expression * block / node("while", "condition", "loop_body"),
 
-    call_statement = identifier * T"(" * T")" / node("call", "call_site_name"),
+    call_statement = identifier * T"(" * arguments * T")" / node("call", "call_site_name", "arguments"),
+    arguments = lpeg.Ct((expression * (T"," * expression)^0)^-1),
 }
 --------------------------------------------------------------------------------
 
