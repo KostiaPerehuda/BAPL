@@ -403,7 +403,8 @@ function Compiler:generate_code_from_expression(expression)
     elseif expression.tag == "call" then
         self:generate_code_from_call(expression)
     elseif expression.tag == "variable" then
-        self:assert_variable_is_defined(expression.variable_name)
+        -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
+        -- self:assert_variable_is_defined(expression.variable_name)
         self:add_opcode("load")
         self:add_opcode(self:variable_index_from_name(expression.variable_name))
     elseif expression.tag == "indexed" then
@@ -703,6 +704,7 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
             -- UPDATE: now that we handle undefined variables at compile time, this is no longer an issue.
             --      BUT, if we separate out compilation and execution stages later on, we will still need
             --           to verify this at runtime.
+            -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
             stack[top] = memory[code[pc]]
             assert(stack[top] ~= nil, "Runtime Error: Attempt to reference unitialized variable '" .. code[pc] .. "'!")
         elseif code[pc] == "store" then
