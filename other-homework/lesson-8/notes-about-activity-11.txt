@@ -1,0 +1,29 @@
+Activity 11 - Default Argument
+
+------------------------------------------------------------------------------------------------------------------------
+
+Add default arguments to the language. Functions that accept a default argument must be declared like here:
+
+  function foo (a, b, c = exp) { ... }
+Only the last argument for a function can have a default value. The extra = exp after the parameter c signals that foo can be called with two or three arguments. If called with only two arguments, exp must be evaluated to provide the default value for the c parameter. When foo is called with three arguments, exp is not evaluated.
+
+
+------------------------------------------------------------------------------------------------------------------------
+
+With the current implementation, 'exp' will be evaluated at the moment of function call. Any variables referenced from
+'exp' will be lloked up in local context of the caller and global context. 'exp' cannot reference other arguments.
+
+Redeclaration of default parameters are not allowed:
+
+    function foo (a, b, c = exp1);
+    function foo (a, b, c = exp2) {}
+
+is not allowed even if exp1 and exp2 are the same. But
+
+    function foo (a, b, c = exp1);
+    function foo (a, b, c) {}
+    function foo (a, b, c);
+
+Is legal and will be treated the same as
+
+    function foo (a, b, c = exp1) {}

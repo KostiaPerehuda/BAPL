@@ -260,7 +260,8 @@ local program = lpeg.P{"functions",
     function_def = (function_header * block) / node("function", "name", "parameters", "body"),
 
     function_header = RW"function" * identifier * T"(" * function_params * T")",
-    function_params = lpeg.Ct((identifier * (T"," * identifier)^0)^-1),
+    function_params = (lpeg.Ct(identifier * (T"," * identifier)^0) * (T"=" * expression)^-1)^-1
+                        / node("parameters", "formal", "default"),
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
     block    = T"{" * sequence * T"}" / node("block", "body"),
@@ -380,7 +381,7 @@ function Compiler:find_local(name)
             return i
         end
     end
-    local parameters = self.parameters
+    local parameters = self.parameters.formal
     for i = 1, #parameters do
         if name == parameters[i] then
             return i - #parameters
@@ -420,13 +421,22 @@ function Compiler:generate_code_from_call(call_node)
     if not call_site then
         error("Compilation Error: undefined function '" .. call_node.call_site_name .. "'!")
     end
-    if #call_site.parameters ~= #call_node.arguments then
-        error("Compilation Error: function '" .. call_site.name .. "' expects "
-                .. #call_site.parameters .. " argument(s), but " .. #call_node.arguments .. " were given!")
+    local called_with_default_argument = false
+    if #call_site.parameters.formal ~= #call_node.arguments then
+        if #call_site.parameters.formal == #call_node.arguments + 1 and call_site.parameters.default then
+            called_with_default_argument = true
+        else
+            error("Compilation Error: function '" .. call_site.name .. "' expects "
+                    .. #call_site.parameters.formal .. " argument(s), but " .. #call_node.arguments .. " were given!")
+        end
     end
 
     for _, argument in ipairs(call_node.arguments) do
         self:generate_code_from_expression(argument)
+    end
+
+    if called_with_default_argument then
+        self:generate_code_from_expression(call_site.parameters.default)
     end
 
     self:add_opcode("call")
@@ -479,7 +489,7 @@ end
 
 function Compiler:verify_no_local_variable_redeclaration_in_current_block(old_level)
     local locals = self.locals
-    local parameters = self.parameters
+    local parameters = self.parameters.formal
     for i = old_level, #locals do
         for j = 1, #parameters do
             if locals[i] == parameters[j] then
@@ -569,7 +579,7 @@ function Compiler:generate_code_from_statement(statement)
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("ret")
-        self:add_opcode(#self.locals + #self.parameters)
+        self:add_opcode(#self.locals + #self.parameters.formal)
     elseif statement.tag == "print" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("print")
@@ -584,20 +594,25 @@ function Compiler:declare_function(function_node)
 
     local name = function_node.name
     local parameters = function_node.parameters
+    local formal_parameters = parameters.formal
 
-    for i = 1, #parameters do
-        for j = i + 1, #parameters do
-            if parameters[i] == parameters[j] then
+    for i = 1, #formal_parameters do
+        for j = i + 1, #formal_parameters do
+            if formal_parameters[i] == formal_parameters[j] then
                 error("Compilation Error: Function '" .. name .. "' contains more than one parameter named '"
-                        .. parameters[i] .. "'!")
+                        .. formal_parameters[i] .. "'!")
             end
         end
     end
     
     if self.functions[name] then
-        if #self.functions[name].parameters ~= #parameters then
+        if #self.functions[name].parameters.formal ~= #formal_parameters then
             error("Compilation Error: Function '" .. name .. "' has already been declared with different "
                     .. "number of parameters!")
+        end
+        if self.functions[name].parameters.default ~= parameters.default then
+            error("Compilation Error: Function '" .. name .. "' has already been declared with default "
+                .. "parameter! There can only be one declaration of a function that specifies the default parameter!")
         end
         return
     end
@@ -642,7 +657,7 @@ local function compile(ast)
     end
     local main = Compiler.functions["main"]
     if not main then error("No function named 'main'") end
-    if #main.parameters > 0 then error("Function 'main' cannot have any parameters!") end
+    if #main.parameters.formal > 0 then error("Function 'main' cannot have any parameters!") end
     return main
 end
 
