@@ -1,0 +1,18 @@
+Notes about minitest
+
+------------------------------------------------------------------------------------------------------------------------
+
+Pulled the minitest from the solutions repository and run the interpreter against it. Will be used as th basis for
+regression testing during further work.
+
+Modifications to the Interpreter:
+
+1. Allowed for numbers written in E-notation to have an optional plus sign next to the exponent.
+
+Modifications to the minitest:
+
+1. Adapted 'function id (x)' to define a local variable named 'z' instead of local variable named 'x' because the
+Interpreter explicitly forbids redefinition of formal parameters.
+
+2. Changed 'function test5 (x, y, z = x * y)' to 'function test5 (x, y, z = 10 * 20)' because the interpreter
+doesn't allow usage of other function parameters in the default expression for the final parameter.  

@@ -90,7 +90,7 @@ local function to_number_node(number)
     return { tag = "number", number_value = tonumber(number) }
 end
 
-local e_notation_suffix = (lpeg.S("eE") * lpeg.P"-"^-1 * digit^1)^-1
+local e_notation_suffix = (lpeg.S("eE") * lpeg.S"+-"^-1 * digit^1)^-1
 local dec_number_body = ((digit^1 * lpeg.P"."^-1 * digit^0) + ("." * digit^1)) * e_notation_suffix
 
 local hex_number_prefix = "0" * lpeg.S("xX")
@@ -487,10 +487,10 @@ function Compiler:generate_code_from_expression(expression)
     end
 end
 
-function Compiler:verify_no_local_variable_redeclaration_in_current_block(old_level)
+function Compiler:verify_no_local_variable_redeclaration_in_current_block(block_base)
     local locals = self.locals
     local parameters = self.parameters.formal
-    for i = old_level, #locals do
+    for i = block_base, #locals do
         for j = 1, #parameters do
             if locals[i] == parameters[j] then
                 error("Compilation Error: Local variable '" .. locals[i] .. "' in function '"
@@ -513,7 +513,7 @@ function Compiler:generate_code_from_block(block)
     self:generate_code_from_statement(block.body)
     local diff = #self.locals - old_level
     if diff > 0 then
-        self:verify_no_local_variable_redeclaration_in_current_block(old_level)
+        self:verify_no_local_variable_redeclaration_in_current_block(old_level + 1)
         for i = 1, diff do
             table.remove(self.locals)
         end
@@ -943,7 +943,7 @@ print("Abstract Syntax Tree:", pt(ast), "\n")
 local main_function = compile(ast)
 print("Compiled Code:", pt(main_function), "\n")
 
-local trace_enabled = true
+local trace_enabled = false
 
 local memory = {}
 local stack = {}
