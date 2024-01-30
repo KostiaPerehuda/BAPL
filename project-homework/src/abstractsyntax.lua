@@ -32,5 +32,33 @@ end
 
 return {
     node = node,
-    number_node = number_node,
+
+    _number   = number_node,
+    _variable = node("variable", "variable_name"),
+
+    _unary_operator   = node("unary_operator", "operator", "operand"),
+    _binary_operator  = node("binop", "left_operand", "operator", "right_operand"),
+    _logical_operator = node("logical_operator", "left_operand", "operator", "right_operand"),
+
+    _new_array = node("new_array", "array_size"),
+    _indexed = node("indexed", "variable", "index"),
+
+    
+    _local_variable = node("local_variable", "name", "initial_value"),
+    _assignment = node("assignment", "target", "expression"),
+
+    _return = node("return", "expression"),
+    _print  = node("print", "expression"),
+
+    _skip = node("skip"),
+    _block = node("block", "body"),
+    _sequence = node("sequence", "first", "second"),
+
+    _if = node("if", "condition", "if_branch", "else_branch"),
+    _while = node("while", "condition", "loop_body"),
+
+    _function = node("function", "name", "parameters", "body"),
+    _parameters = node("parameters", "formal", "default"),
+    
+    _call = node("call", "call_site_name", "arguments"),
 }

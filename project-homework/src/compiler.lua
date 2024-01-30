@@ -226,7 +226,7 @@ function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
     elseif statement.tag == "local_variable" then
-        self:generate_code_from_expression(statement.initial_value or ast.number_node(0))
+        self:generate_code_from_expression(statement.initial_value or ast._number(0))
         self.locals[#self.locals + 1] = statement.name
     elseif statement.tag == "block" then
         self:generate_code_from_block(statement)
@@ -321,7 +321,7 @@ function Compiler:compile_function(function_node)
     self.parameters = self.functions[function_node.name].parameters
     self.current_function_name = function_node.name
     self:generate_code_from_statement(function_node.body)
-    self:generate_code_from_statement(ast.node("return", "expression")(ast.number_node(0)))
+    self:generate_code_from_statement(ast._return(ast._number(0)))
 end
 
 local function compile(ast)

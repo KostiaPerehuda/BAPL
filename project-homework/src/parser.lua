@@ -2,8 +2,6 @@ local lpeg = require "lpeg"
 local pt = require "pt".pt
 
 local ast = require "abstractsyntax"
-local node = ast.node
-local number_node = ast.number_node
 
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
@@ -72,9 +70,10 @@ local hex_number_body = (hex_digit^1 * lpeg.P"."^-1 * hex_digit^0) + ("." * hex_
 local dec_number = -hex_number_prefix * dec_number_body
 local hex_number =  hex_number_prefix * hex_number_body
 
-local number = lpeg.C(dec_number + hex_number) / number_node * space
+local number = lpeg.C(dec_number + hex_number) / ast._number * space
 
 ---------------------------------- Identifier ----------------------------------
+---[[
 local exclude_reserved_words = lpeg.P(function(input, position)
     for _, reserved_word in pairs(reserved_words) do
         if input:sub(1, position-1):sub(-#reserved_word) == reserved_word then
@@ -83,52 +82,37 @@ local exclude_reserved_words = lpeg.P(function(input, position)
     end
     return true
 end)
+--]]
 
 local identifier = T(lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * exclude_reserved_words)
 
 ----------------------------------- Variable -----------------------------------
-local function to_variable_node(variable_name)
-    return { tag = "variable", variable_name = variable_name }
-end
-
-local variable = identifier / to_variable_node
+local variable = identifier / ast._variable
 
 ---------------------------------- Expression ----------------------------------
 
-local function to_binop_node(left_operand, operator, right_operand)
-    return { tag = "binop", left_operand = left_operand, operator = operator, right_operand = right_operand }
-end
-
 local function fold_left_into_binop_tree(list)
     local tree = list[1]
-    for i = 2, #list, 2 do tree = to_binop_node(tree, list[i], list[i + 1]) end
+    for i = 2, #list, 2 do tree = ast._binary_operator(tree, list[i], list[i + 1]) end
     return tree
 end
 
 local function fold_right_into_binop_tree(list)
     local tree = list[#list]
-    for i = #list - 1, 2, -2 do tree = to_binop_node(list[i - 1], list[i], tree) end
+    for i = #list - 1, 2, -2 do tree = ast._binary_operator(list[i - 1], list[i], tree) end
     return tree
-end
-
-local function apply_unary_operator(operator, expression)
-    return { tag = "unary_operator", operator = operator, operand = expression }
-end
-
-local function to_logical_operator_node(left_operand, operator, right_operand)
-    return { tag = "logical_operator", left_operand = left_operand, operator = operator, right_operand = right_operand }
 end
 
 local function fold_left_into_logical(operator)
     return function(list)
         local tree = list[1]
-        for i = 2, #list do tree = to_logical_operator_node(tree, operator, list[i]) end
+        for i = 2, #list do tree = ast._logical_operator(tree, operator, list[i]) end
         return tree
     end
 end
 
 local function fold_left_into_indexed_node(list)
-    local to_indexed_node = node("indexed", "variable", "index")
+    local to_indexed_node = ast._indexed
     local tree = list[1]
     for i = 2, #list do tree = to_indexed_node(tree, list[i]) end
     return tree
@@ -162,48 +146,44 @@ local expression = lpeg.P{"expression", expression = logical_or,
      comparison = lpeg.Ct(  sum    * (  comparison_operator   *   sum   )^0) / fold_left_into_binop_tree,
         sum     = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
         term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
-      negation  = (negation_operator * negation / apply_unary_operator) + exponent,
+      negation  = (negation_operator * negation / ast._unary_operator) + exponent,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
         atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var, 
-     new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / node("new_array", "array_size"),
-    function_call = identifier * T"(" * arguments * T")" / node("call", "call_site_name", "arguments"),
+     new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / ast._new_array,
+    function_call = identifier * T"(" * arguments * T")" / ast._call,
     arguments = lpeg.Ct((expression * (T"," * expression)^0)^-1),
     indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
 }
 
 -------------------------------- Local Variables -------------------------------
-local local_var = RW"var" * identifier * (T"=" * expression)^-1 / node("local_variable", "name", "initial_value")
+local local_var = RW"var" * identifier * (T"=" * expression)^-1 / ast._local_variable
 
 ---------------------------------- Assignment ----------------------------------
 local assignment_target = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node
-local assignment = assignment_target * T"=" * expression / node("assignment", "target", "expression")
+local assignment = assignment_target * T"=" * expression / ast._assignment
 
 ------------------------------- Return Statement -------------------------------
-local return_statement = RW"return" * expression / node("return", "expression")
+local return_statement = RW"return" * expression / ast._return
 
 ------------------------------- Print Statement --------------------------------
-local print_statement = T"@" * expression / node("print", "expression")
+local print_statement = T"@" * expression / ast._print
 
 ----------------------------- Sequences and Blocks -----------------------------
-local skip_node = node("skip")
-local sequence_node = node("sequence", "first", "second")
 
 local function fold_right_to_sequence_node(statements)
-    if #statements == 0 then return skip_node() end
+    if #statements == 0 then return ast._skip() end
 
     local node = statements[#statements]
     for i = #statements - 1, 1, -1 do
-        node = sequence_node(statements[i], node)
+        node = ast._sequence(statements[i], node)
     end
     return node
 end
 
-local if_node = node("if", "condition", "if_branch", "else_branch")
-
 local function fold_right_to_if_node(list)
     local last_if_node_index = #list - (#list % 2) - 1
-    local node = if_node(list[last_if_node_index], list[last_if_node_index + 1], list[last_if_node_index + 2])
-    for i = last_if_node_index - 1, 1, -2 do node = if_node(list[i - 1], list[i], node) end
+    local node = ast._if(list[last_if_node_index], list[last_if_node_index + 1], list[last_if_node_index + 2])
+    for i = last_if_node_index - 1, 1, -2 do node = ast._if(list[i - 1], list[i], node) end
     return node
 end
 
@@ -229,15 +209,15 @@ local program = lpeg.P{"functions",
 
     functions = lpeg.Ct((function_decl + function_def)^0),
 
-    function_decl = (function_header * T";") / node("function", "name", "parameters"),
-    function_def = (function_header * block) / node("function", "name", "parameters", "body"),
+    function_decl = (function_header * T";") / ast._function,
+    function_def = (function_header * block) / ast._function,
 
     function_header = RW"function" * identifier * T"(" * function_params * T")",
     function_params = (lpeg.Ct(identifier * (T"," * identifier)^0) * (T"=" * expression)^-1)^-1
-                        / node("parameters", "formal", "default"),
+                        / ast._parameters,
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,
-    block    = T"{" * sequence * T"}" / node("block", "body"),
+    block    = T"{" * sequence * T"}" / ast._block,
     
     statement = block
                 + assignment
@@ -254,9 +234,9 @@ local program = lpeg.P{"functions",
         * (RW"else" * block)^-1
         ) / fold_right_to_if_node,
 
-    while_statement = RW"while" * expression * block / node("while", "condition", "loop_body"),
+    while_statement = RW"while" * expression * block / ast._while,
 
-    call_statement = identifier * T"(" * arguments * T")" / node("call", "call_site_name", "arguments"),
+    call_statement = identifier * T"(" * arguments * T")" / ast._call,
     arguments = lpeg.Ct((expression * (T"," * expression)^0)^-1),
 }
 --------------------------------------------------------------------------------
