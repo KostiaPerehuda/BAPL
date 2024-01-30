@@ -1,5 +1,7 @@
 local pt = require "pt".pt
 
+local Stack = require "stack"
+
 ----------------------------------------------------- Interpreter ------------------------------------------------------
 
 local function is_array(value)
@@ -27,12 +29,7 @@ local function value_as_string(value, visited_arrays)
     return array_as_string
 end
 
-local function stack_as_string(stack, stack_top)
-    local stack_as_string = "{ Top --> |"
-    for i = stack_top, 1, -1 do stack_as_string = stack_as_string .. value_as_string(stack[i]) .. "|" end
-    stack_as_string = stack_as_string .. " <-- Bottom }"
-    return stack_as_string
-end
+
 
 local function instruction_as_string(code, instruction_pointer)
     local instruction = code[instruction_pointer]
@@ -54,12 +51,12 @@ local function log_intrepreter_start(trace_enabled)
     print("Starting Interpreter...")
 end
 
-local function log_intrepreter_state(trace_enabled, cycle, code, pc, stack, stack_top)
+local function log_intrepreter_state(trace_enabled, cycle, code, pc, stack)
     if not trace_enabled then return end
     
     print("Interpreter Cycle: " .. cycle)
     print("\t" .. "PC = " .. tostring(pc))
-    print("\t" .. "Stack = " .. stack_as_string(stack, stack_top))
+    print("\t" .. "Stack = " .. tostring(stack))
     print("\t" .. "Current Instruction = " .. instruction_as_string(code, pc))
 end
 
@@ -94,10 +91,6 @@ local function verify_array_type_and_index_bounds(array, index)
         "ArrayAccessError: index '".. index .. "' is out of bounds of array of size " .. array.size .. "!")
 end
 
-local function drop(stack, top, number_of_values)
-    for i = top - number_of_values + 1, top do stack[i] = nil end
-    return top - number_of_values
-end
 
 local function allocate_new_array(sizes, start_at_size)
     local start_at_size = start_at_size or 1
@@ -117,7 +110,7 @@ local function verify_call_site_can_be_executed(call_site)
         "Runtime Error: function  '" .. call_site.name .. "' cannot be executed, as it has no associated code!")
 end
 
-local function run(call_site, memory, stack, top, trace_enabled, cycle)
+local function call(call_site, memory, stack, trace_enabled, cycle)
     verify_call_site_can_be_executed(call_site)
 
 
@@ -125,164 +118,153 @@ local function run(call_site, memory, stack, top, trace_enabled, cycle)
     cycle = (cycle or 0) + 1
 
     local code = call_site.code
-    local base = top
+    local base = #stack
     local pc = 1
 
     log_function_start(trace_enabled, call_site.name)
 
     while true do
-        log_intrepreter_state(trace_enabled, cycle, code, pc, stack, top)
+        log_intrepreter_state(trace_enabled, cycle, code, pc, stack)
 
         local current_instruction = code[pc]
 
         if current_instruction == "ret" then
             log_function_exit(trace_enabled, call_site.name)
 
-            local n = code[pc + 1]
-            stack[top - n] = stack[top]
-            top = drop(stack, top, n)
+            local return_value = stack:pop()
+            stack:drop(code[pc + 1])
+            stack:push(return_value)
 
-            return top, cycle
+            return cycle
         elseif current_instruction == "call" then
             pc = pc + 1
             local call_site = code[pc]
-            top, cycle = run(call_site, memory, stack, top, trace_enabled, cycle)
+            cycle = call(call_site, memory, stack, trace_enabled, cycle)
         elseif current_instruction == "print" then
-            print(value_as_string(stack[top]))
-            top = drop(stack, top, 1)
+            print(value_as_string(stack:pop()))
         elseif current_instruction == "jump" then
             pc = pc + 1
             pc = pc + code[pc]
         elseif current_instruction == "jump_if_zero" then
             pc = pc + 1
-            pc = pc + ((stack[top] == 0) and code[pc] or 0)
-            top = drop(stack, top, 1)
+            pc = pc + ((stack:pop() == 0) and code[pc] or 0)
         elseif current_instruction == "jump_if_zero_or_pop" then
             pc = pc + 1
-            if stack[top] == 0 then
+            if stack:peek() == 0 then
                 pc = pc + code[pc]
             else
-                top = drop(stack, top, 1)
+                stack:drop()
             end
         elseif current_instruction == "jump_if_not_zero_or_pop" then
             pc = pc + 1
-            if stack[top] ~= 0 then
+            if stack:peek() ~= 0 then
                 pc = pc + code[pc]
             else
-                top = drop(stack, top, 1)
+                stack:drop()
             end
         elseif current_instruction == "push" then
             pc = pc + 1
-            top = top + 1
-            stack[top] = code[pc]
+            stack:push(code[pc])
         elseif current_instruction == "pop" then
             pc = pc + 1
-            top = drop(stack, top, code[pc])
+            stack:drop(code[pc])
         elseif code[pc] == "load_local" then
             pc = pc + 1
-            top = top + 1
-            stack[top] = stack[base + code[pc]]
+            stack:push(stack[base + code[pc]])
         elseif code[pc] == "load" then
             pc = pc + 1
-            top = top + 1
             -- TODO: might be useful to throw undefined variable exception here
             --       in case the variable is not present in the memory
             -- UPDATE: now that we handle undefined variables at compile time, this is no longer an issue.
             --      BUT, if we separate out compilation and execution stages later on, we will still need
             --           to verify this at runtime.
             -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
-            stack[top] = memory[code[pc]]
-            assert(stack[top] ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
+            stack:push(memory[code[pc]])
+            assert(stack:peek() ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
         elseif code[pc] == "store_local" then
             pc = pc + 1
-            stack[base + code[pc]] = stack[top]
-            top = drop(stack, top, 1)
+            stack[base + code[pc]] = stack:pop()
         elseif code[pc] == "store" then
             pc = pc + 1
-            memory[code[pc]] = stack[top]
-            top = drop(stack, top, 1)
+            memory[code[pc]] = stack:pop()
         elseif code[pc] == "new_array" then
             pc = pc + 1
             local number_of_dimensions = code[pc]
-            local sizes = table.move(stack, top - number_of_dimensions + 1, top, 1, {})
-            top = drop(stack, top, number_of_dimensions - 1)
-            stack[top] = allocate_new_array(sizes)
+
+            local sizes = table.pack(stack:pop(number_of_dimensions))
+            stack:push(allocate_new_array(sizes))
+
         elseif code[pc] == "array_load" then
-            local array = stack[top - 1]
-            local index = stack[top]
+            local array, index = stack:pop(2)
             verify_array_type_and_index_bounds(array, index)
-            stack[top - 1] = array[index]
-            top = drop(stack, top, 1)
+            stack:push(array[index])
         elseif code[pc] == "array_store" then
-            local value = stack[top - 2]
-            local array = stack[top - 1]
-            local index = stack[top]
+            local value, array, index = stack:pop(3)
             verify_array_type_and_index_bounds(array, index)
             array[index] = value
-            top = drop(stack, top, 3)
         elseif current_instruction == "eq" then
-            stack[top - 1] = (stack[top - 1] == stack[top]) and 1 or 0
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push((left == right) and 1 or 0)
         elseif current_instruction == "neq" then
-            stack[top - 1] = (stack[top - 1] ~= stack[top]) and 1 or 0
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push((left ~= right) and 1 or 0)
         elseif current_instruction == "lte" then
-            stack[top - 1] = (stack[top - 1] <= stack[top]) and 1 or 0
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push((left <= right) and 1 or 0)
         elseif current_instruction == "gte" then
-            stack[top - 1] = (stack[top - 1] >= stack[top]) and 1 or 0
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push((left >= right) and 1 or 0)
         elseif current_instruction == "lt" then
-            stack[top - 1] = (stack[top - 1] < stack[top]) and 1 or 0
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push((left < right) and 1 or 0)
         elseif current_instruction == "gt" then
-            stack[top - 1] = (stack[top - 1] > stack[top]) and 1 or 0
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push((left > right) and 1 or 0)
         elseif current_instruction == "not" then
-            stack[top] = (stack[top] == 0) and 1 or 0
+            local operand = stack:pop()
+            stack:push((operand == 0) and 1 or 0)
         elseif current_instruction == "add" then
-            stack[top - 1] = stack[top - 1] + stack[top]
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push(left + right)
         elseif current_instruction == "sub" then
-            stack[top - 1] = stack[top - 1] - stack[top]
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push(left - right)
         elseif current_instruction == "mul" then
-            stack[top - 1] = stack[top - 1] * stack[top]
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push(left * right)
         elseif current_instruction == "div" then
-            stack[top - 1] = stack[top - 1] / stack[top]
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push(left / right)
         elseif current_instruction == "mod" then
-            stack[top - 1] = stack[top - 1] % stack[top]
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push(left % right)
         elseif current_instruction == "exp" then
-            stack[top - 1] = stack[top - 1] ^ stack[top]
-            top = drop(stack, top, 1)
+            local left, right = stack:pop(2)
+            stack:push(left ^ right)
         elseif current_instruction == "negate" then
-            stack[top] = -stack[top]
+            stack:push(-stack:pop())
         else
             error("unknown instruction: '" .. current_instruction .. "'")
         end
 
         -- can only have numbers or arrays on the stack
-        assert(top == 0 or top > 0 and (type(stack[top]) == "number" or type(stack[top]) == "table"))
+        assert(#stack == 0 or #stack > 0 and (type(stack[#stack]) == "number" or type(stack[#stack]) == "table"))
 
         pc = pc + 1
         cycle = cycle + 1
     end
 end
 
-local function execute(call_site, trace_enabled)
+local function run(call_site, trace_enabled)
     local memory = {}
-    local stack = {}
-    local stack_top = 0
+    local stack = Stack:new()
     log_intrepreter_start(trace_enabled)
-    stack_top = run(call_site, memory, stack, stack_top, trace_enabled)
-    local result = stack[stack_top]
+    call(call_site, memory, stack, trace_enabled)
+    local result = stack:pop()
     log_interpreter_exit(trace_enabled, result)
     return result
 end
 
-return { run = execute }
+return { run = run }
 
 

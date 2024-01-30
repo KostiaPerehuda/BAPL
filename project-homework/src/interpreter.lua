@@ -14,5 +14,5 @@ print("Abstract Syntax Tree:", pt(ast), "\n")
 local main_function = compile(ast)
 print("Compiled Code:", pt(main_function), "\n")
 
-local result = run(main_function, false)
+local result = run(main_function, true)
 print("Execution Result = " .. pt(result))
