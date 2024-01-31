@@ -1,6 +1,10 @@
-a = new [2][2];
+function main() {
+    a = new [3][2];
 
-a[1] = a;
-a[2][1] = 1;
+    a[1] = a;
+    a[2][1] = 1;
+    a[3] = a[2];
 
-return a;
+    @a;
+    return a;
+}

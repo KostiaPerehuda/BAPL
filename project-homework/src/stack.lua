@@ -53,35 +53,9 @@ function Stack:size()
 end
 
 
-local function is_array(value)
-    return type(value) == "table" and value.size ~= nil
-end
-
-local function value_as_string(value, visited_arrays)
-    if not is_array(value) then return tostring(value) end
-
-    local array_prefix = "array["..tostring(value.size).."]: { "
-    local array_suffix = " }"
-    
-    visited_arrays = visited_arrays or {}
-    if visited_arrays[value] then return array_prefix .. "..." .. array_suffix end
-    visited_arrays[value] = true
-
-    if value.size == 1 then return array_prefix .. value_as_string(value[1], visited_arrays) .. array_suffix end
-
-    local array_as_string = array_prefix
-    for i = 1, value.size - 1 do
-        array_as_string = array_as_string .. value_as_string(value[i], visited_arrays) .. ", "
-    end
-    array_as_string = array_as_string .. value_as_string(value[value.size], visited_arrays) .. array_suffix
-
-    return array_as_string
-end
-
-
 function Stack:__tostring()
     local stack_as_string = "{ Top --> |"
-    for i = #self, 1, -1 do stack_as_string = stack_as_string .. value_as_string(self[i]) .. "|" end
+    for i = #self, 1, -1 do stack_as_string = stack_as_string .. tostring(self[i]) .. "|" end
     stack_as_string = stack_as_string .. " <-- Bottom }"
     return stack_as_string
 end
