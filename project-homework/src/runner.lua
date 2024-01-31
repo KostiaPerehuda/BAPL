@@ -1,5 +1,7 @@
 local pt = require "pt".pt
 
+local log_levels = require "loglevels".runner
+
 local Stack = require "stack"
 local Array = require "array"
 
@@ -19,13 +21,8 @@ end
 
 ------------------------------------ Logger ------------------------------------
 
-local log_levels = {
-    trace_function_calls = 1 << 0,
-    trace_every_cycle    = 1 << 1,
-}
-
 local function log_intrepreter_start(log_level)
-    if log_level == 0 then return end
+    if log_level & log_levels.everything == 0 then return end
     print("Starting Interpreter...")
 end
 
@@ -39,8 +36,8 @@ local function log_intrepreter_state(log_level, cycle, code, pc, stack)
 end
 
 local function log_interpreter_exit(log_level, return_value)
-    if log_level == 0 then return end
-    print("Finished Execution. Returning '" .. tostring(return_value) .."'")
+    if log_level & log_levels.everything == 0 then return end
+    print("Finished Execution. Returning '" .. tostring(return_value) .. "'\n")
 end
 
 local function log_function_start(log_level, function_name)

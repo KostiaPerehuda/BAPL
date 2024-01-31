@@ -3,6 +3,8 @@ local pt = require "pt".pt
 
 local ast = require "abstractsyntax"
 
+local log_levels = require "loglevels".parser
+
 ------------------------------------------------------- Grammar --------------------------------------------------------
 
 ------------------------------------ Debug -------------------------------------
@@ -268,9 +270,14 @@ local function syntax_error(input, longest_match)
     os.exit(1)
   end
 
-local function parse(input)
+local function parse(input, log_level)
     local ast = grammar:match(input)
     if not ast then syntax_error(input, longest_match) end
+
+    if log_level and (log_level & log_levels.display_ast ~= 0) then
+        print("Abstract Syntax Tree: " .. pt(ast) .. "\n")
+    end
+    
     return ast
 end
 

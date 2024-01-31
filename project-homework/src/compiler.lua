@@ -1,6 +1,8 @@
 local pt = require "pt".pt
 local ast = require "abstractsyntax"
 
+local log_levels = require "loglevels".compiler
+
 ------------------------------------------------------- Compiler -------------------------------------------------------
 
 local Compiler = { functions = {}, globals = {}, nglobals = 0, locals = {} }
@@ -324,7 +326,7 @@ function Compiler:compile_function(function_node)
     self:generate_code_from_statement(ast._return(ast._number(0)))
 end
 
-local function compile(ast)
+local function compile(ast, log_level)
     for _, function_node in ipairs(ast) do
         Compiler:declare_function(function_node)
     end
@@ -338,6 +340,11 @@ local function compile(ast)
     local main = Compiler.functions["main"]
     if not main then error("No function named 'main'") end
     if #main.parameters.formal > 0 then error("Function 'main' cannot have any parameters!") end
+
+    if log_level and (log_level & log_levels.display_compiled_code ~= 0) then
+        print("Compiled Code: " .. pt(main) .. "\n")
+    end
+
     return main
 end
 
