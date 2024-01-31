@@ -1,27 +1,30 @@
-# should succeed
-# a = new [2];
+function main()
+{
+    # should succeed
+    # a = new [2];
 
-# should fail
-# a = new [0];
+    # should fail
+    # a = new [0];
 
-# should fail
-# a = new [0.5];
+    # should fail
+    # a = new [0.5];
 
-# should fail
-# a = new [-1];
+    # should fail
+    # a = new [-1];
 
 
-# should succeed
-# a = new [2]; a[1] = 1; a[2] = a[1];
+    # should succeed
+    # a = new [2]; a[1] = 1; a[2] = a[1];
 
-# should fail
-# a = new [2]; a[0] = 1;
+    # should fail
+    # a = new [2]; a[0] = 1;
 
-# should fail
-# a = new [2]; a[3] = 1;
+    # should fail
+    # a = new [2]; a[3] = 1;
 
-# should fail
-# a = new [2]; a[1.5] = 1;
+    # should fail
+    # a = new [2]; a[1.5] = 1;
 
-# should fail
-# a = new [2]; a[-1] = 1;
+    # should fail
+    # a = new [2]; a[-1] = 1;
+}

@@ -8,17 +8,17 @@ end
 
 local function verify_array_size(size)
     assert(math.type(size) == "integer" and size >= 1,
-        "ArrayCreationError: an array size must be a positive integer, but got '" .. size .. "'!")
+        "Array Creation Error: an array size must be a positive integer, but got '" .. size .. "'!")
 end
 
 
 local function verify_array_type_and_index_bounds(array, index)
     assert(is_array(array),
-        "ArrayAccessError: cannot perform array access on a non-array type!")
+        "Array Access Error: cannot perform array access on a non-array type!")
     assert(math.type(index) == "integer",
-        "ArrayAccessError: a non-integer value '".. index .."' cannot be used as an array index!")
+        "Array Access Error: a non-integer value '".. index .."' cannot be used as an array index!")
     assert(index >= 1 and index <= array.size,
-        "ArrayAccessError: index '".. index .. "' is out of bounds of array of size " .. array.size .. "!")
+        "Array Access Error: index '".. index .. "' is out of bounds of array of size " .. array.size .. "!")
 end
 
 
