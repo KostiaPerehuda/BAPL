@@ -6,6 +6,9 @@ local Stack = require "stack"
 local Array = require "array"
 
 ----------------------------------------------------- Interpreter ------------------------------------------------------
+
+------------------------------------ Logger ------------------------------------
+
 local function instruction_as_string(code, instruction_pointer)
     local instruction = code[instruction_pointer]
     if instruction == "push" then
@@ -18,8 +21,6 @@ local function instruction_as_string(code, instruction_pointer)
     instruction = "{ " .. instruction .. " }"
     return instruction
 end
-
------------------------------------- Logger ------------------------------------
 
 local function log_intrepreter_start(log_level)
     if log_level & log_levels.everything == 0 then return end
@@ -37,7 +38,7 @@ end
 
 local function log_interpreter_exit(log_level, return_value)
     if log_level & log_levels.everything == 0 then return end
-    print("Finished Execution. Returning '" .. tostring(return_value) .. "'\n")
+    print("Finished Execution. Returning '" .. tostring(return_value) .. "'", "\n")
 end
 
 local function log_function_start(log_level, function_name)

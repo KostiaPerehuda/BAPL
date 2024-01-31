@@ -10,8 +10,8 @@ local log_levels = require "loglevels"
 
 -- local log_level = log_levels.everything
 -- local log_level = log_levels.everything ~ log_levels.runner.trace_every_cycle
--- local log_level = log_levels.everything ~ log_levels.runner.everything
-local log_level = log_levels.nothing
+local log_level = log_levels.everything ~ log_levels.runner.everything
+-- local log_level = log_levels.nothing
 
 local source = io.read("a")
 

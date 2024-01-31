@@ -114,9 +114,8 @@ local function fold_left_into_logical(operator)
 end
 
 local function fold_left_into_indexed_node(list)
-    local to_indexed_node = ast._indexed
     local tree = list[1]
-    for i = 2, #list do tree = to_indexed_node(tree, list[i]) end
+    for i = 2, #list do tree = ast._indexed(tree, list[i]) end
     return tree
 end
 
@@ -157,7 +156,7 @@ local expression = lpeg.P{"expression", expression = logical_or,
     indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
 }
 
--------------------------------- Local Variables -------------------------------
+------------------------- Local Variable Declarations --------------------------
 local local_var = RW"var" * identifier * (T"=" * expression)^-1 / ast._local_variable
 
 ---------------------------------- Assignment ----------------------------------
