@@ -40,6 +40,8 @@ return {
     _binary_operator  = node("binop", "left_operand", "operator", "right_operand"),
     _logical_operator = node("logical_operator", "left_operand", "operator", "right_operand"),
 
+    _ternary_operator = node("ternary_operator", "condition", "truthy_expression", "falsy_expression"),
+
     _new_array = node("new_array", "array_size"),
     _indexed = node("indexed", "variable", "index"),
 

@@ -128,6 +128,7 @@ local comparison_operator = lpeg.C(lpeg.P("==") + "!=" + "<=" + ">=" + "<" +">")
 
 local expression  = lpeg.V"expression"
 
+local ternary_operator = lpeg.V"ternary_operator"
 local  logical_or = lpeg.V"logical_or"
 local logical_and = lpeg.V"logical_and"
 local  comparison = lpeg.V"comparison"
@@ -141,7 +142,10 @@ local  new_array  = lpeg.V"new_array"
 local function_call = lpeg.V"function_call"
 local arguments = lpeg.V"arguments"
 
-local expression = lpeg.P{"expression", expression = logical_or,
+local expression = lpeg.P{"expression", expression = ternary_operator,
+    ternary_operator =  (logical_or * T"?" * ternary_operator * T":" * ternary_operator / ast._ternary_operator)
+                        + logical_or,
+
      logical_or = lpeg.Ct(logical_and * (RW"or" * logical_and)^0) / fold_left_into_logical("or"),
     logical_and = lpeg.Ct( comparison * (RW"and" * comparison)^0) / fold_left_into_logical("and"),
      comparison = lpeg.Ct(  sum    * (  comparison_operator   *   sum   )^0) / fold_left_into_binop_tree,
@@ -149,11 +153,14 @@ local expression = lpeg.P{"expression", expression = logical_or,
         term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
       negation  = (negation_operator * negation / ast._unary_operator) + exponent,
       exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
-        atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var, 
+
+        atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var,
+
      new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / ast._new_array,
+    indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
+
     function_call = identifier * T"(" * arguments * T")" / ast._call,
     arguments = lpeg.Ct((expression * (T"," * expression)^0)^-1),
-    indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,
 }
 
 ------------------------- Local Variable Declarations --------------------------

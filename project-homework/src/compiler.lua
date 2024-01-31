@@ -164,6 +164,17 @@ function Compiler:generate_code_from_expression(expression)
     elseif expression.tag == "unary_operator" then
         self:generate_code_from_expression(expression.operand)
         self:add_opcode(get_opcode_from_unary_operator(expression.operator))
+    elseif expression.tag == "ternary_operator" then
+        self:generate_code_from_expression(expression.condition)
+        local jump_to_falsy_expression = self:generate_jump_if_zero()
+
+        self:generate_code_from_expression(expression.truthy_expression)
+        local jump_to_end = self:generate_jump()
+
+        self:point_jump_to_here(jump_to_falsy_expression)
+        self:generate_code_from_expression(expression.falsy_expression)
+
+        self:point_jump_to_here(jump_to_end)
     else
         error("invalid expression tree: " .. pt(expression))
     end

@@ -98,6 +98,17 @@ function test5 (x, y, z = 10 * 20) {
   return x + z
 }
 
+# Ternary operator
+# Should return 0
+function test6 () {
+  var a = 3 >= 2 ? -2 : 3;
+  var b = 3 < 2 ?  -3 : 2;
+
+  var c = a + b == 0 ? a == -2 ? 1 : 2 : 3;
+  var d = a + b != 0 ? a == -2 ? 1 : 2 : a == -2 ? -1 : -2;
+  return a + b + c + d;
+}
+
 
 function main () {
   results = new [20];
@@ -123,6 +134,10 @@ function main () {
   var res = test5(10, 20) - test5(10, 20, 10 * 20);
   nresults = nresults + 1;
   results[nresults] = res;
+
+  var ternary = test6();
+  nresults = nresults + 1;
+  results[nresults] = ternary;
 
   @results;
 
