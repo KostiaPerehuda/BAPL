@@ -66,7 +66,7 @@ local function call(call_site, memory, stack, log_level, cycle)
     cycle = (cycle or 0) + 1
 
     local code = call_site.code
-    local base = #stack
+    local base = stack:size()
     local pc = 1
 
     log_function_start(log_level, call_site.name)
@@ -128,7 +128,7 @@ local function call(call_site, memory, stack, log_level, cycle)
             --           to verify this at runtime.
             -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
             local value = memory[code[pc]]
-            assert(value ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
+            -- assert(value ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
             stack:push(value)
         elseif code[pc] == "store_local" then
             pc = pc + 1
@@ -191,8 +191,9 @@ local function call(call_site, memory, stack, log_level, cycle)
             error("unknown instruction: '" .. current_instruction .. "'")
         end
 
-        -- can only have numbers or arrays on the stack
-        assert(#stack == 0 or #stack > 0 and (type(stack[#stack]) == "number" or type(stack[#stack]) == "table"))
+        -- can only have numbers or arrays on the stack or nil
+        assert(stack:size() == 0 or stack:size() > 0
+            and (stack:peek() == nil or type(stack:peek()) == "number" or type(stack:peek()) == "table"))
 
         pc = pc + 1
         cycle = cycle + 1

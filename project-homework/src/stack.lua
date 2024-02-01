@@ -1,7 +1,7 @@
 local pt = require "pt".pt
 
 
-local Stack = {}
+local Stack = { top = 0 }
 
 
 function Stack:new(object)
@@ -16,17 +16,18 @@ end
 
 function Stack:drop(number_of_values)
     number_of_values = number_of_values or 1
-    assert(number_of_values <= #self, "Stack Underflow Error: Not enough elements to drop!")
+    assert(number_of_values <= self:size(), "Stack Underflow Error: Not enough elements to drop!")
 
     for i = 1, number_of_values do table.remove(self) end
+    self.top = self.top - number_of_values
 end
 
 
 function Stack:pop(number_of_values)
     number_of_values = number_of_values or 1
-    assert(number_of_values <= #self, "Stack Underflow Error: Not enough elements to pop!")
+    assert(number_of_values <= self:size(), "Stack Underflow Error: Not enough elements to pop!")
 
-    values = table.move(self, #self - number_of_values + 1, #self, 1, {})
+    values = table.move(self, self:size() - number_of_values + 1, self:size(), 1, {})
     self:drop(number_of_values)
 
     return table.unpack(values)
@@ -35,27 +36,28 @@ end
 
 function Stack:push(...)
     local new_values = {...}
-    table.move(new_values, 1, #new_values, #self + 1, self)
+    table.move(new_values, 1, #new_values, self:size() + 1, self)
+    self.top = self.top + #new_values
 end
 
 
 function Stack:peek(number_of_values)
     number_of_values = number_of_values or 1
-    assert(number_of_values <= #self, "Stack Underflow Error: Not enough elements to peek!")
+    assert(number_of_values <= self:size(), "Stack Underflow Error: Not enough elements to peek!")
 
-    if number_of_values == 1 then return self[#self] end
-    return table.unpack(table.move(self, #self - number_of_values + 1, #self, 1, {}))
+    if number_of_values == 1 then return self[self:size()] end
+    return table.unpack(table.move(self, self:size() - number_of_values + 1, self:size(), 1, {}))
 end
 
 
 function Stack:size()
-    return #self
+    return self.top
 end
 
 
 function Stack:__tostring()
     local stack_as_string = "{ Top --> |"
-    for i = #self, 1, -1 do stack_as_string = stack_as_string .. tostring(self[i]) .. "|" end
+    for i = self:size(), 1, -1 do stack_as_string = stack_as_string .. tostring(self[i]) .. "|" end
     stack_as_string = stack_as_string .. " <-- Bottom }"
     return stack_as_string
 end
