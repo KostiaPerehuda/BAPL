@@ -75,18 +75,7 @@ local hex_number =  hex_number_prefix * hex_number_body
 local number = lpeg.C(dec_number + hex_number) / ast._number * space
 
 ---------------------------------- Identifier ----------------------------------
----[[
-local exclude_reserved_words = lpeg.P(function(input, position)
-    for _, reserved_word in pairs(reserved_words) do
-        if input:sub(1, position-1):sub(-#reserved_word) == reserved_word then
-           return false
-        end
-    end
-    return true
-end)
---]]
-
-local identifier = T(lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) * exclude_reserved_words)
+local identifier = T(lpeg.C(alpha_char_or_underscore * alpha_numeric_char_or_underscore^0) - reserved)
 
 ----------------------------------- Variable -----------------------------------
 local variable = identifier / ast._variable
