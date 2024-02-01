@@ -1,5 +1,5 @@
 function main() {
-    a = new [3][2];
+    var a = new [3][2];
 
     a[1] = a;
     a[2][1] = 1;

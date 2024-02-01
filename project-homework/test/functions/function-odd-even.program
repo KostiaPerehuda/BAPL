@@ -1,8 +1,9 @@
   function odd ();
 
   function even () {
-    if n?|0 {
-      n = n?|0 - 1;
+    var local_n = n ?| 0; 
+    if local_n {
+      n = local_n - 1;
       return odd()
     } else {
       return 1
@@ -10,8 +11,9 @@
   }
 
   function odd () {
-    if n?|0 {
-      n = n?|0 - 1;
+    var local_n = n ?| 0; 
+    if local_n {
+      n = local_n - 1;
       return even()
     } else {
       return 0

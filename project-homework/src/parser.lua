@@ -151,7 +151,7 @@ local expression = lpeg.P{"expression", expression = ternary_operator + null,
 
     null_operators = is_present + or_else + atom,
      is_present = atom * T"??" / ast._is_present_operator,
-       or_else  = atom * T"?|" * expression / ast._or_else_operator,
+       or_else  = atom * T"?|" * sum / ast._or_else_operator,
 
         atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var,
 

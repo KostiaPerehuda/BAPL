@@ -127,7 +127,8 @@ end
 function Compiler:generate_code_from_call(call_node)
     local call_site, called_with_default_argument = self:resolve_call(call_node)
     if not call_site then
-        error("Compilation Error: cannot resolve function call to " .. create_pretty_call_site_name(call_node))
+        error("Compilation Error: cannot resolve function call to " .. create_pretty_call_site_name(call_node)
+                .. "! In function " .. self.current_function_name .. "! In " .. pt(call_node))
     end
 
     for _, argument in ipairs(call_node.arguments) do
@@ -215,13 +216,14 @@ function Compiler:type_check_call(call_node)
     for i, argument in ipairs(call_node.arguments) do
         if self:is_of_optional_type(argument) then
             error("Type Error: Function Calls cannot accept arguments of optional type! "
-            .. "Rule violated by argument number '" .. i .. "'! In " .. pt(call_node))
+            .. "Rule violated by argument number '" .. i .. "! In function " .. self.current_function_name .. "'! In " .. pt(call_node))
         end
     end
 
     local call_site, _ = self:resolve_call(call_node)
     if not call_site then
-        error("Compilation Error: cannot resolve function call to " .. create_pretty_call_site_name(call_node))
+        error("Compilation Error: cannot resolve function call to " .. create_pretty_call_site_name(call_node)
+            .. "! In function " .. self.current_function_name .. "! In " .. pt(call_node))
     end
 
     return call_site.returns_optional
@@ -244,57 +246,68 @@ function Compiler:is_of_optional_type(expression)
         end
     elseif expression.tag == "indexed" then
         if self:is_of_optional_type(expression.variable) then
-            error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(expression))
+            error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In function "
+             .. self.current_function_name .. "! In " .. pt(expression))
         end
         if self:is_of_optional_type(expression.index) then
-            error("Type Error: Indexed Access Operator cannot accept index of optional type! In " .. pt(expression))
+            error("Type Error: Indexed Access Operator cannot accept index of optional type! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     elseif expression.tag == "new_array" then
         for i = 1, #expression.array_size do
             if self:is_of_optional_type(expression.array_size[i]) then 
                 error("Type Error: New Array Operator cannot have accept operands of optional type! "
-                .. "But the size of dimension '" .. tostring(i) .. "' is of optional type! In " .. pt(expression))
+                .. "But the size of dimension '" .. tostring(i) .. "' is of optional type! In function "
+                    .. self.current_function_name .. "! In " .. pt(expression))
             end
         end
         return false
     elseif expression.tag == "binop" then
         if self:is_of_optional_type(expression.left_operand) or self:is_of_optional_type(expression.right_operand) then
-            error("Type Error: Binary '" .. expression.operator .. "' cannot accept operands of optional type! In " .. pt(expression))
+            error("Type Error: Binary '" .. expression.operator .. "' cannot accept operands of optional type! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     elseif expression.tag == "logical_operator" then
         if self:is_of_optional_type(expression.left_operand) or self:is_of_optional_type(expression.right_operand) then
-            error("Type Error: Logical '" .. expression.operator .. "' cannot accept operands of optional type! In " .. pt(expression))
+            error("Type Error: Logical '" .. expression.operator .. "' cannot accept operands of optional type! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     elseif expression.tag == "unary_operator" then
         if self:is_of_optional_type(expression.operand) then
-            error("Type Error: Unary '" .. expression.operator .. "' cannot accept operand of optional type! In " .. pt(expression))
+            error("Type Error: Unary '" .. expression.operator .. "' cannot accept operand of optional type! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     elseif expression.tag == "ternary_operator" then
         if self:is_of_optional_type(expression.condition)
             or self:is_of_optional_type(expression.truthy_expression)
             or self:is_of_optional_type(expression.falsy_expression) then
-            error("Type Error: Ternary Operator cannot accept operands of optional type! In " .. pt(expression))
+            error("Type Error: Ternary Operator cannot accept operands of optional type! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     elseif expression.tag == "is_present_operator" then
         if not self:is_of_optional_type(expression.operand) then
-            error("Type Error: Is Present Operator cannot accept non-optional type as its operand! In " .. pt(expression))
+            error("Type Error: Is Present Operator cannot accept non-optional type as its operand! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     elseif expression.tag == "or_else_operator" then
         if not self:is_of_optional_type(expression.left_operand) then
-            error("Type Error: Or Else Operator cannot accept non-optional type as its left operand! In " .. pt(expression))
+            error("Type Error: Or Else Operator cannot accept non-optional type as its left operand! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         if self:is_of_optional_type(expression.right_operand) then
-            error("Type Error: Or Else Operator cannot accept optional type as its right operand! In " .. pt(expression))
+            error("Type Error: Or Else Operator cannot accept optional type as its right operand! In function "
+                .. self.current_function_name .. "! In " .. pt(expression))
         end
         return false
     else
-        error("Cannot perform type inference; Invalid expression tree: " .. pt(expression))
+        error("Cannot perform type inference! In function "
+            .. self.current_function_name .. "! Invalid expression tree: " .. pt(expression))
     end
 end
 
@@ -313,7 +326,8 @@ function Compiler:verify_no_local_variable_redeclaration_in_current_block(block_
 
         for j = i + 1, #locals do
             if locals[i].name == locals[j].name then
-                error("Compilation Error: Local variable '" .. locals[i].name
+                error("Compilation Error: Local variable '" .. locals[i].name .. "' in function "
+                    .. self.current_function_name
                         .. "' has been defined more than once in the same block!")
             end
         end
@@ -322,26 +336,31 @@ end
 
 function Compiler:type_check_statement(statement)
     if statement.tag == "assignment" then
+        local value_is_of_optional_type = self:is_of_optional_type(statement.expression);
 
         if statement.target.tag == "variable" then
             local local_index, local_is_optional = self:find_local(statement.target.variable_name)
             if local_index then
-                if not local_is_optional and self:is_of_optional_type(statement.expression) then
-                    error("Type Error: Cannot assign value of optional type to a local varaible of non-optional type! In " .. pt(statement))
+                if not local_is_optional and value_is_of_optional_type then
+                    error("Type Error: Cannot assign value of optional type to a local varaible of non-optional type! In function "
+                        .. self.current_function_name .. "! In " ..  pt(statement))
                 end
             else
                 -- valid: can assign anything to global variable
             end
         elseif statement.target.tag == "indexed" then
-            if self:is_of_optional_type(statement.expression) then
-                error("Type Error: Cannot assign value of optional type to an array element! In " .. pt(statement))
+            if value_is_of_optional_type then
+                error("Type Error: Cannot assign value of optional type to an array element! In function "
+                    .. self.current_function_name .. "! In " .. pt(statement))
             end
 
             if self:is_of_optional_type(statement.target.variable) then
-                error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(statement.target))
+                error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In function "
+                    .. self.current_function_name .. "! In " .. pt(statement.target))
             end
             if self:is_of_optional_type(statement.target.index) then
-                error("Type Error: Indexed Access Operator cannot accept index of optional type! In " .. pt(statement.target))
+                error("Type Error: Indexed Access Operator cannot accept index of optional type! In function "
+                    .. self.current_function_name .. "! In " .. pt(statement.target))
             end
         else
             error("invalid tree for assignment target: " .. pt(statement))
@@ -351,7 +370,8 @@ function Compiler:type_check_statement(statement)
         if (not statement.is_optional)
             and (statement.initial_value and self:is_of_optional_type(statement.initial_value)) then
                 error("Type Error: Cannot initialize non-optional variable '"
-                    ..statement.name.."' with value of optional type! " .. pt(statement))
+                    ..statement.name.."' with value of optional type! In function "
+                        .. self.current_function_name .. "! In " .. pt(statement))
         end
     elseif statement.tag == "block" then
         -- do not type check children because it will be done when generating code for them
@@ -362,17 +382,20 @@ function Compiler:type_check_statement(statement)
     elseif statement.tag == "if" then
         -- do not type check children because it will be done when generating code for them
         if self:is_of_optional_type(statement.condition) then
-            error("Type Error: If-ElseIf-Else Statement cannot accept condition of optional type! " .. pt(statement.condition))
+            error("Type Error: If-ElseIf-Else Statement cannot accept condition of optional type! In function "
+                .. self.current_function_name .. "! In " .. pt(statement.condition))
         end
     elseif statement.tag == "while" then
         -- do not type check children because it will be done when generating code for them
         if self:is_of_optional_type(statement.condition) then
-                error("Type Error: While Statement cannot accept condition of optional type! " .. pt(statement.condition))
+                error("Type Error: While Statement cannot accept condition of optional type! In function "
+                    .. self.current_function_name .. "! In " .. pt(statement.condition))
         end
     elseif statement.tag == "return" then
         if not self.current_function_returns_optional and self:is_of_optional_type(statement.expression) then
             error("Type Error: Cannot Return an expression of optional type! Because function "
-                .. self.current_function_name .. " has not declared optional return! In " .. pt(statement))
+                .. self.current_function_name .. " has not declared optional return! In function "
+                    .. self.current_function_name .. "! In " .. pt(statement))
         end
     elseif statement.tag == "print" then
         -- always valid
