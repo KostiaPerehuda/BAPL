@@ -152,7 +152,8 @@ local function call(call_site, memory, stack, log_level, cycle)
             stack[base + code[pc]] = stack:pop()
         elseif code[pc] == "store" then
             pc = pc + 1
-            memory[code[pc]] = stack:pop()
+            value = stack:pop()
+            memory[code[pc]] = (value ~= "null") and value or nil
         elseif code[pc] == "new_array" then
             pc = pc + 1
             local number_of_dimensions = code[pc]
