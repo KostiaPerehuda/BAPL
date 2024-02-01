@@ -1,8 +1,8 @@
   function odd ();
 
   function even () {
-    if n {
-      n = n - 1;
+    if n?|0 {
+      n = n?|0 - 1;
       return odd()
     } else {
       return 1
@@ -10,8 +10,8 @@
   }
 
   function odd () {
-    if n {
-      n = n - 1;
+    if n?|0 {
+      n = n?|0 - 1;
       return even()
     } else {
       return 0

@@ -233,9 +233,9 @@ function Compiler:is_of_optional_type(expression)
             return true
         end
     elseif expression.tag == "indexed" then
-        -- if self:is_of_optional_type(expression.variable) then
-        --     error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(expression))
-        -- end
+        if self:is_of_optional_type(expression.variable) then
+            error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(expression))
+        end
         if self:is_of_optional_type(expression.index) then
             error("Type Error: Indexed Access Operator cannot accept index of optional type! In " .. pt(expression))
         end
@@ -321,9 +321,9 @@ function Compiler:type_check_statement(statement)
                 error("Type Error: Cannot assign value of optional type to an array element! In " .. pt(statement))
             end
 
-            -- if self:is_of_optional_type(statement.target.variable) then
-            --     error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(statement.target))
-            -- end
+            if self:is_of_optional_type(statement.target.variable) then
+                error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(statement.target))
+            end
             if self:is_of_optional_type(statement.target.index) then
                 error("Type Error: Indexed Access Operator cannot accept index of optional type! In " .. pt(statement.target))
             end
@@ -351,12 +351,12 @@ function Compiler:type_check_statement(statement)
     elseif statement.tag == "if" then
         -- do not type check children because it will be done when generating code for them
         if self:is_of_optional_type(statement.condition) then
-            error("Type Error: If-ElseIf-Else Statement cannot accept condition of optional type! " .. pt(statement))
+            error("Type Error: If-ElseIf-Else Statement cannot accept condition of optional type! " .. pt(statement.condition))
         end
     elseif statement.tag == "while" then
         -- do not type check children because it will be done when generating code for them
         if self:is_of_optional_type(statement.condition) then
-                error("Type Error: While Statement cannot accept condition of optional type! " .. pt(statement))
+                error("Type Error: While Statement cannot accept condition of optional type! " .. pt(statement.condition))
         end
     elseif statement.tag == "return" then
         if self:is_of_optional_type(statement.expression) then

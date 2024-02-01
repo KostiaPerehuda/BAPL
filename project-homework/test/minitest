@@ -46,6 +46,8 @@ function test3 (a, b, c) {
 
 # arrays
 function test4 () {
+  var results = g_results?|0;
+
   var a = new [10];
   var i = 1; while i <= 10 { a[i] = i^2; i = i + 1 };
 
@@ -111,7 +113,8 @@ function test6 () {
 
 
 function main () {
-  results = new [20];
+  var results = new [20];
+  g_results = results;
   nresults = 0;
 
   nresults = (nresults?|0) + 1;
