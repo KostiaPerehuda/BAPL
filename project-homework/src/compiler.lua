@@ -305,9 +305,9 @@ function Compiler:verify_no_local_variable_redeclaration_in_current_block(block_
     for i = block_base, #locals do
         for j = 1, #parameters do
             if locals[i].name == parameters[j] then
-                error("Compilation Error: Local variable '" .. locals[i].name .. "' in function '"
+                error("Compilation Error: Local variable '" .. locals[i].name .. "' in function "
                     .. self.current_function_name
-                        .. "' attempts to redefine the formal parameter with the same name!")
+                        .. " attempts to redefine the formal parameter with the same name!")
             end
         end
 
@@ -371,8 +371,8 @@ function Compiler:type_check_statement(statement)
         end
     elseif statement.tag == "return" then
         if not self.current_function_returns_optional and self:is_of_optional_type(statement.expression) then
-            error("Type Error: Cannot Return an expression of optional type! Because function '"
-                .. self.current_function_name .. "' has not declared optional return! In" .. pt(statement))
+            error("Type Error: Cannot Return an expression of optional type! Because function "
+                .. self.current_function_name .. " has not declared optional return! In " .. pt(statement))
         end
     elseif statement.tag == "print" then
         -- always valid
