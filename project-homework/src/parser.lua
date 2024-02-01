@@ -16,7 +16,7 @@ end
 local longest_match = 0
 
 local longest_match_tracker = lpeg.P(function(_,position)
-    longest_match = math.max(longest_match, position)
+        longest_match = math.max(longest_match, position)
     return true
 end)
 
@@ -124,6 +124,7 @@ local  comparison = lpeg.V"comparison"
 local     sum     = lpeg.V"sum"
 local     term    = lpeg.V"term"
 local   negation  = lpeg.V"negation"
+local is_present  = lpeg.V"is_present"
 local   exponent  = lpeg.V"exponent"
 local     atom    = lpeg.V"atom"
 local indexed_var = lpeg.V"indexed_var"
@@ -141,9 +142,11 @@ local expression = lpeg.P{"expression", expression = ternary_operator + RW"null"
         sum     = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
         term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
       negation  = (negation_operator * negation / ast._unary_operator) + exponent,
-      exponent  = lpeg.Ct(  atom   * (  exponential_operator  *   atom  )^0) / fold_right_into_binop_tree,
+      exponent  = lpeg.Ct(is_present * (  exponential_operator  *   is_present  )^0) / fold_right_into_binop_tree,
+     is_present = (atom * T"??" / ast._is_present) + atom,
 
         atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var,
+
 
      new_array  = RW"new" * lpeg.Ct((T"[" * expression * T"]")^1) / ast._new_array,
     indexed_var = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node,

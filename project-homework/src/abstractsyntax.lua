@@ -42,6 +42,8 @@ return {
 
     _ternary_operator = node("ternary_operator", "condition", "truthy_expression", "falsy_expression"),
 
+    _is_present = node("is_present", "operand"),
+
     _new_array = node("new_array", "array_size"),
     _indexed = node("indexed", "variable", "index"),
 

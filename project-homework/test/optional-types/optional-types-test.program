@@ -38,3 +38,20 @@ function null_keyword() {
     return empty == 0;
 }
 
+#{
+    operator '??' a.k.a 'is present':
+        Syntax: "<expression> ??"
+
+    Returns 1 if <expression> is not null and 0 if it is null
+
+    The operator has the presedence hisher of exponent but less than atom, because its intention is
+        to eliminate the propagation of 'null's though the expression.
+#} 
+
+function is_present_operator() {
+    # Should return 1
+    var? empty;
+    var? not_empty = 2;
+    return empty?? == 0 and not_empty?? == 1;
+}
+
