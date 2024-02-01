@@ -55,7 +55,7 @@ end
 
 local function verify_call_site_can_be_executed(call_site)
     assert(call_site.code,
-        "Runtime Error: function  '" .. call_site.name .. "' cannot be executed, as it has no associated code!")
+        "Runtime Error: function " .. call_site.name .. " cannot be executed, because it has no defined function body!")
 end
 
 local function call(call_site, memory, stack, log_level, cycle)

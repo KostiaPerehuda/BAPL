@@ -42,9 +42,6 @@ end
 function Compiler:global_variable_index_from_name(variable_name)
     local num = self.globals[variable_name]
     if not num then
-        assert(not self.functions[variable_name],
-                "Compiler Error: Cannot use '" .. variable_name .. "' as a variable, "
-                .. "because a function with the same name is already defined!")
         num = self.nglobals + 1
         self.nglobals = num
         self.globals[variable_name] = num
@@ -98,19 +95,30 @@ function Compiler:point_jump_to_here(jump)
     self:point_jump_to(jump, self:current_position())
 end
 
+
+function Compiler:find_overload(name, number_of_parameters)
+    return self.functions[name.."@"..number_of_parameters]
+end
+
+
+function Compiler:resolve_call(call_node)
+    local call_site = self:find_overload(call_node.call_site_name, #call_node.arguments)
+    if call_site then return call_site, false end
+
+    call_site = self:find_overload(call_node.call_site_name, #call_node.arguments + 1)
+    if call_site and call_site.parameters.default then return call_site, true end
+
+    return nil, nil
+end
+
+local function create_pretty_call_site_name(call_node)
+    return "<'" .. call_node.call_site_name .. "' with " .. #call_node.arguments .. " agrument(s)>"
+end
+
 function Compiler:generate_code_from_call(call_node)
-    local call_site = self.functions[call_node.call_site_name]
+    local call_site, called_with_default_argument = self:resolve_call(call_node)
     if not call_site then
-        error("Compilation Error: undefined function '" .. call_node.call_site_name .. "'!")
-    end
-    local called_with_default_argument = false
-    if #call_site.parameters.formal ~= #call_node.arguments then
-        if #call_site.parameters.formal == #call_node.arguments + 1 and call_site.parameters.default then
-            called_with_default_argument = true
-        else
-            error("Compilation Error: function '" .. call_site.name .. "' expects "
-                    .. #call_site.parameters.formal .. " argument(s), but " .. #call_node.arguments .. " were given!")
-        end
+        error("Compilation Error: cannot resolve function call to " .. create_pretty_call_site_name(call_node))
     end
 
     for _, argument in ipairs(call_node.arguments) do
@@ -283,56 +291,79 @@ function Compiler:generate_code_from_statement(statement)
     end
 end
 
-function Compiler:declare_function(function_node)
 
-    local name = function_node.name
-    local parameters = function_node.parameters
-    local formal_parameters = parameters.formal
+local function create_function_node_signature(function_node)
+    return function_node.name .. "@" .. #function_node.parameters.formal
+end
+
+local function create_pretty_function_node_name(function_node)
+    return "<'" .. function_node.name .. "' with " .. #function_node.parameters.formal .. " formal parameter(s)>"
+end
+
+local function default_parameter_redefinition_happened(old_function_decalaration, new_function_decalaration)
+    return (old_function_decalaration.parameters.default and new_function_decalaration.parameters.default)
+        and (new_function_decalaration.parameters.default ~= old_function_decalaration.parameters.default)
+end
+
+
+function Compiler:declare_function(function_node)
+    local name = create_pretty_function_node_name(function_node)
+    local formal_parameters = function_node.parameters.formal
 
     for i = 1, #formal_parameters do
         for j = i + 1, #formal_parameters do
             if formal_parameters[i] == formal_parameters[j] then
-                error("Compilation Error: Function '" .. name .. "' contains more than one parameter named '"
+                error("Compilation Error: Function " .. name .. " contains more than one parameter named '"
                         .. formal_parameters[i] .. "'!")
             end
         end
     end
-    
-    if self.functions[name] then
-        if #self.functions[name].parameters.formal ~= #formal_parameters then
-            error("Compilation Error: Function '" .. name .. "' has already been declared with different "
-                    .. "number of parameters!")
-        end
-        if self.functions[name].parameters.default ~= parameters.default then
-            error("Compilation Error: Function '" .. name .. "' has already been declared with default "
+
+    local signature = create_function_node_signature(function_node)
+
+    if self.functions[signature] then
+        if default_parameter_redefinition_happened(self.functions[signature], function_node) then
+            error("Compilation Error: Function " .. name .. " has already been declared with default "
                 .. "parameter! There can only be one declaration of a function that specifies the default parameter!")
         end
-        return
+
+        if function_node.parameters.default then
+            self.functions[signature].parameters.default = function_node.parameters.default
+        end
+
+        return self.functions[signature]
     end
 
-    if self.globals[name] then
-        error("Compilation Error: Function '" .. name .. "' cannot be declared, \
+    if self.globals[function_node.name] then
+        error("Compilation Error: Function " .. name .. " cannot be declared, \
             \rbecause there already exists a global variable with the same name!")
     end
 
-    self.functions[name] = { name = name, parameters = parameters }
+    self.functions[signature] = {
+        name = name,
+        parameters = {
+            count = #formal_parameters,
+            default = function_node.parameters.default,
+        }
+    }
+
+    return self.functions[signature]
 end
 
 function Compiler:compile_function(function_node)
 
-    self:declare_function(function_node)
+    local call_site = self:declare_function(function_node)
     
     if not function_node.body then return end
     
-    if self.functions[function_node.name].code then
-        error("Compilation Error: Function '" .. function_node.name .. "' has been defined more than once!")
+    if call_site.code then
+        error("Compilation Error: Function " .. call_site.name .. " has been defined more than once!")
     end
 
-    local code  = {}
-    self.code = code
-    self.functions[function_node.name].code = code
-    self.parameters = self.functions[function_node.name].parameters
-    self.current_function_name = function_node.name
+    call_site.code = {}
+    self.code = call_site.code
+    self.parameters = function_node.parameters
+    self.current_function_name = call_site.name
     self:generate_code_from_statement(function_node.body)
     self:generate_code_from_statement(ast._return(ast._number(0)))
 end
@@ -348,9 +379,8 @@ local function compile(ast, log_level)
         assert(call_site.code,
                 "Compilation Error: function '" .. call_site.name .. "' has been declared but not defined!")
     end
-    local main = Compiler.functions["main"]
-    if not main then error("No function named 'main'") end
-    if #main.parameters.formal > 0 then error("Function 'main' cannot have any parameters!") end
+    local main = Compiler:find_overload("main", 0)
+    if not main then error("No function 'main' with 0 formal parameters") end
 
     if log_level and (log_level & log_levels.display_compiled_code ~= 0) then
         print("Compiled Code: " .. pt(main) .. "\n")

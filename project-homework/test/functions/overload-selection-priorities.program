@@ -1,0 +1,35 @@
+#{
+    Overload Selection Order:
+        1. Function with the same number of parameters as the number of arguments.
+        2. Function with one more formal parameter than number of arguments but only if it specifies
+            default value for the last argument.
+        3. Error otherwise.
+#}
+
+function main() {
+    @(main2()   == 1);      # should print 1
+    @(main2(15) == 15);     # should print 1
+
+    @(main3()   == 20);     # should print 1
+    @(main3(20) == 40);     # should print 1
+}
+
+
+function main2() {
+    return 1;
+}
+
+function main2(a);
+
+function main2(a = 10) {
+    return a;
+}
+
+
+function main3(a);
+
+function main3(a = 10);
+
+function main3(a) {
+    return a*2;
+}

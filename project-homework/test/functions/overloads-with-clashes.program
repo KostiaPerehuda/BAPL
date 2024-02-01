@@ -1,0 +1,19 @@
+#{
+    This program should not compile as we have two defintions for the 'main3(a)' function!
+#}
+
+function main() {
+    return 2;
+}
+
+function main2() {
+    return 22;
+}
+
+function main3(a) {
+    return 22;
+}
+
+function main3(a) {
+    return 22;
+}

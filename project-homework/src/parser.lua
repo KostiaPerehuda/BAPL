@@ -221,7 +221,7 @@ local program = lpeg.P{"functions",
     function_def = (function_header * block) / ast._function,
 
     function_header = RW"function" * identifier * T"(" * function_params * T")",
-    function_params = (lpeg.Ct(identifier * (T"," * identifier)^0) * (T"=" * expression)^-1)^-1
+    function_params = ((lpeg.Ct(identifier * (T"," * identifier)^0) * (T"=" * expression)^-1) + lpeg.Cc({}))
                         / ast._parameters,
 
     sequence = lpeg.Ct((statement * (delimiter * statement)^0)^-1) / fold_right_to_sequence_node * delimiter^-1,

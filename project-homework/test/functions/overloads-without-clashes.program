@@ -1,0 +1,13 @@
+function main() {
+    @(main2() + main2(10) + main2(100, 1000) == 1111); # Should print 1
+}
+
+function main2() {
+    return 1;
+}
+function main2(a) {
+    return a;
+}
+function main2(a, b) {
+    return a + b;
+}
