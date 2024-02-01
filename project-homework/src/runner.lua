@@ -127,8 +127,9 @@ local function call(call_site, memory, stack, log_level, cycle)
             --      BUT, if we separate out compilation and execution stages later on, we will still need
             --           to verify this at runtime.
             -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
-            stack:push(memory[code[pc]])
-            assert(stack:peek() ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
+            local value = memory[code[pc]]
+            assert(value ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
+            stack:push(value)
         elseif code[pc] == "store_local" then
             pc = pc + 1
             stack[base + code[pc]] = stack:pop()

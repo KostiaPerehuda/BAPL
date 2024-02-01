@@ -46,7 +46,7 @@ local function T(t)
     return t * space
 end
 
-local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new", "function", "var"}
+local reserved_words = {"return", "if", "elseif", "else", "while", "and", "or", "new", "function", "var", "null"}
 
 local reserved = lpeg.P(false)
 for i = 1, #reserved_words do
@@ -142,7 +142,7 @@ local  new_array  = lpeg.V"new_array"
 local function_call = lpeg.V"function_call"
 local arguments = lpeg.V"arguments"
 
-local expression = lpeg.P{"expression", expression = ternary_operator,
+local expression = lpeg.P{"expression", expression = ternary_operator + RW"null",
     ternary_operator =  (logical_or * T"?" * ternary_operator * T":" * ternary_operator / ast._ternary_operator)
                         + logical_or,
 

@@ -1,5 +1,6 @@
 function main() {
-    @(optional_type_declarations() == 1);   # should print 1
+    @(optional_type_declarations());   # should print 1
+    @(null_keyword())                  # should print 1
 }
 
 #{
@@ -9,8 +10,31 @@ function main() {
 #} 
 
 function optional_type_declarations() {
+    # Should return 1
     var? empty0;
     var? empty1 = 1;
-    return empty1;
+    return empty1 == 1;
+}
+
+#{
+    keyword 'null' (reserved word):
+        Will be used to represent an absence of the value
+
+    For better null-safety, and to discourage polluting code with 'null's,
+        expressions will not be allowed to contain nested 'null's inside them,
+        but a 'null' will be an expression.
+        
+    For now 'null' will be equivalent to number 0;
+#} 
+
+function null_keyword() {
+
+    # Should not compile (uncomment to verify)
+    # var? empty = null;
+    # return empty == null;
+
+    # Should return 1
+    var? empty = null;
+    return empty == 0;
 }
 
