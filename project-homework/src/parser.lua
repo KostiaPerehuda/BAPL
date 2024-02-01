@@ -133,8 +133,10 @@ local indexed_var = lpeg.V"indexed_var"
 local  new_array  = lpeg.V"new_array"
 local function_call = lpeg.V"function_call"
 local arguments = lpeg.V"arguments"
+local null = lpeg.V"null"
 
-local expression = lpeg.P{"expression", expression = ternary_operator + RW"null",
+local expression = lpeg.P{"expression", expression = ternary_operator + null,
+    null = RW"null" / ast._null,
     ternary_operator =  (logical_or * (T"?" - (T"??" + T"?|"))
                             * ternary_operator * T":" * ternary_operator
                             / ast._ternary_operator) + logical_or,

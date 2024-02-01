@@ -7,9 +7,11 @@ local log_levels = require "loglevels".compiler
 
 local Compiler = { functions = {}, globals = {}, nglobals = 0, locals = {} }
 
-function Compiler:add_opcode(opcode)
+function Compiler:add_opcode(...)
     local code = self.code
-    code[#code + 1] = opcode
+    for _, opcode in ipairs({...}) do
+        code[#code + 1] = opcode
+    end
 end
 
 local opcode_from_binary_operator = {
@@ -56,17 +58,17 @@ end
 function Compiler:find_local(name)
     local locals = self.locals
     for i = #locals, 1, -1 do
-        if name == locals[i] then
-            return i
+        if name == locals[i].name then
+            return i, locals[i].is_optional
         end
     end
     local parameters = self.parameters.formal
     for i = 1, #parameters do
         if name == parameters[i] then
-            return i - #parameters
+            return i - #parameters, false
         end
     end
-    return nil
+    return nil, nil
 end
 
 function Compiler:current_position()
@@ -74,8 +76,7 @@ function Compiler:current_position()
 end
 
 function Compiler:generate_jump(jump)
-    self:add_opcode(jump or "jump")
-    self:add_opcode(0)
+    self:add_opcode(jump or "jump", 0)
     return self:current_position()
 end
 
@@ -137,17 +138,14 @@ function Compiler:generate_code_from_call(call_node)
         self:generate_code_from_expression(call_site.parameters.default)
     end
 
-    self:add_opcode("call")
-    self:add_opcode(call_site)
+    self:add_opcode("call", call_site)
 end
 
 function Compiler:generate_code_from_expression(expression)
     if expression.tag == "number" then
-        self:add_opcode("push")
-        self:add_opcode(expression.number_value)
+        self:add_opcode("push", expression.number_value)
     elseif expression.tag == "null" then
-        self:add_opcode("push")
-        self:add_opcode("null")
+        self:add_opcode("push", "null")
     elseif expression.tag == "call" then
         self:generate_code_from_call(expression)
     elseif expression.tag == "variable" then
@@ -155,11 +153,9 @@ function Compiler:generate_code_from_expression(expression)
         -- self:assert_variable_is_defined(expression.variable_name)
         local local_index = self:find_local(expression.variable_name)
         if local_index then
-            self:add_opcode("load_local")
-            self:add_opcode(local_index)
+            self:add_opcode("load_local", local_index)
         else
-            self:add_opcode("load")
-            self:add_opcode(self:global_variable_index_from_name(expression.variable_name))
+            self:add_opcode("load", self:global_variable_index_from_name(expression.variable_name))
         end
     elseif expression.tag == "indexed" then
         self:generate_code_from_expression(expression.variable)
@@ -169,8 +165,7 @@ function Compiler:generate_code_from_expression(expression)
         for i = 1, #expression.array_size do
             self:generate_code_from_expression(expression.array_size[i])
         end
-        self:add_opcode("new_array")
-        self:add_opcode(#expression.array_size)
+        self:add_opcode("new_array", #expression.array_size)
     elseif expression.tag == "binop" then
         self:generate_code_from_expression(expression.left_operand)
         self:generate_code_from_expression(expression.right_operand)
@@ -211,28 +206,168 @@ function Compiler:generate_code_from_expression(expression)
         self:generate_code_from_expression(expression.right_operand)
         self:point_jump_to_here(jump)
     else
-        error("invalid expression tree: " .. pt(expression))
+        error("Cannot generate code; Invalid expression tree: " .. pt(expression))
     end
 end
+
+
+function Compiler:is_of_optional_type(expression)
+    if expression.tag == "number" then
+        return false
+    elseif expression.tag == "null" then
+        return true
+    elseif expression.tag == "call" then
+        for i, argument in ipairs(expression.arguments) do
+            if self:is_of_optional_type(argument) then
+                error("Type Error: Function Calls cannot accept arguments of optional type! "
+                .. "Rule violated by argument number '" .. i .. "'! In " .. pt(expression))
+            end
+        end
+        -- TODO: allow optional function returns?
+        return false
+    elseif expression.tag == "variable" then 
+        local local_index, is_optional = self:find_local(expression.variable_name)
+        if local_index then
+            return is_optional
+        else
+            return true
+        end
+    elseif expression.tag == "indexed" then
+        -- if self:is_of_optional_type(expression.variable) then
+        --     error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(expression))
+        -- end
+        if self:is_of_optional_type(expression.index) then
+            error("Type Error: Indexed Access Operator cannot accept index of optional type! In " .. pt(expression))
+        end
+        return false
+    elseif expression.tag == "new_array" then
+        for i = 1, #expression.array_size do
+            if self:is_of_optional_type(expression.array_size[i]) then 
+                error("Type Error: New Array Operator cannot have accept operands of optional type! "
+                .. "But the size of dimension '" .. tostring(i) .. "' is of optional type! In " .. pt(expression))
+            end
+        end
+        return false
+    elseif expression.tag == "binop" then
+        if self:is_of_optional_type(expression.left_operand) or self:is_of_optional_type(expression.right_operand) then
+            error("Type Error: Binary '" .. expression.operator .. "' cannot accept operands of optional type! In " .. pt(expression))
+        end
+        return false
+    elseif expression.tag == "logical_operator" then
+        if self:is_of_optional_type(expression.left_operand) or self:is_of_optional_type(expression.right_operand) then
+            error("Type Error: Logical '" .. expression.operator .. "' cannot accept operands of optional type! In " .. pt(expression))
+        end
+        return false
+    elseif expression.tag == "unary_operator" then
+        if self:is_of_optional_type(expression.operand) then
+            error("Type Error: Unary '" .. expression.operator .. "' cannot accept operand of optional type! In " .. pt(expression))
+        end
+        return false
+    elseif expression.tag == "ternary_operator" then
+        if self:is_of_optional_type(expression.condition)
+            or self:is_of_optional_type(expression.truthy_expression)
+            or self:is_of_optional_type(expression.falsy_expression) then
+            error("Type Error: Ternary Operator cannot accept operands of optional type! In " .. pt(expression))
+        end
+        return false
+    elseif expression.tag == "is_present_operator" then
+        return false
+    elseif expression.tag == "or_else_operator" then
+        if self:is_of_optional_type(expression.right_operand) then
+            error("Type Error: Or Else Operator cannot accept optional type as its second operand! In " .. pt(expression))
+        end
+        return false
+    else
+        error("Cannot perform type inference; Invalid expression tree: " .. pt(expression))
+    end
+end
+
 
 function Compiler:verify_no_local_variable_redeclaration_in_current_block(block_base)
     local locals = self.locals
     local parameters = self.parameters.formal
     for i = block_base, #locals do
         for j = 1, #parameters do
-            if locals[i] == parameters[j] then
-                error("Compilation Error: Local variable '" .. locals[i] .. "' in function '"
+            if locals[i].name == parameters[j] then
+                error("Compilation Error: Local variable '" .. locals[i].name .. "' in function '"
                     .. self.current_function_name
                         .. "' attempts to redefine the formal parameter with the same name!")
             end
         end
 
         for j = i + 1, #locals do
-            if locals[i] == locals[j] then
-                error("Compilation Error: Local variable '" .. locals[i]
+            if locals[i].name == locals[j].name then
+                error("Compilation Error: Local variable '" .. locals[i].name
                         .. "' has been defined more than once in the same block!")
             end
         end
+    end
+end
+
+function Compiler:type_check_statement(statement)
+    if statement.tag == "assignment" then
+
+        if statement.target.tag == "variable" then
+            local local_index, local_is_optional = self:find_local(statement.target.variable_name)
+            if local_index then
+                if not local_is_optional and self:is_of_optional_type(statement.expression) then
+                    error("Type Error: Cannot assign value of optional type to a local varaible of non-optional type! In " .. pt(statement))
+                end
+            else
+                -- valid: can assign anything to global variable
+            end
+        elseif statement.target.tag == "indexed" then
+            if self:is_of_optional_type(statement.expression) then
+                error("Type Error: Cannot assign value of optional type to an array element! In " .. pt(statement))
+            end
+
+            -- if self:is_of_optional_type(statement.target.variable) then
+            --     error("Type Error: Indexed Access Operator cannot be performed on the value of optional type! In " .. pt(statement.target))
+            -- end
+            if self:is_of_optional_type(statement.target.index) then
+                error("Type Error: Indexed Access Operator cannot accept index of optional type! In " .. pt(statement.target))
+            end
+        else
+            error("invalid tree for assignment target: " .. pt(statement))
+        end
+        
+    elseif statement.tag == "local_variable" then
+        if (not statement.is_optional)
+            and (statement.initial_value and self:is_of_optional_type(statement.initial_value)) then
+                error("Type Error: Cannot initialize non-optional variable '"
+                    ..statement.name.."' with value of optional type! " .. pt(statement))
+        end
+    elseif statement.tag == "block" then
+        -- do not type check children because it will be done when generating code for them
+    elseif statement.tag == "call" then
+        for i, argument in ipairs(statement.arguments) do
+            if self:is_of_optional_type(argument) then
+                error("Type Error: Function Calls cannot accept arguments of optional type! "
+                .. "Rule violated by argument number '" .. i .. "'! In " .. pt(statement))
+            end
+        end
+    elseif statement.tag == "sequence" then
+        -- do not type check children because it will be done when generating code for them
+    elseif statement.tag == "if" then
+        -- do not type check children because it will be done when generating code for them
+        if self:is_of_optional_type(statement.condition) then
+            error("Type Error: If-ElseIf-Else Statement cannot accept condition of optional type! " .. pt(statement))
+        end
+    elseif statement.tag == "while" then
+        -- do not type check children because it will be done when generating code for them
+        if self:is_of_optional_type(statement.condition) then
+                error("Type Error: While Statement cannot accept condition of optional type! " .. pt(statement))
+        end
+    elseif statement.tag == "return" then
+        if self:is_of_optional_type(statement.expression) then
+            error("Type Error: Return Statement cannot accept expression of optional type! " .. pt(statement))
+        end
+    elseif statement.tag == "print" then
+        -- always valid
+    elseif statement.tag == "skip" then
+        -- always valid
+    else
+        error("invalid tree")
     end
 end
 
@@ -245,8 +380,7 @@ function Compiler:generate_code_from_block(block)
         for i = 1, diff do
             table.remove(self.locals)
         end
-        self:add_opcode("pop")
-        self:add_opcode(diff)
+        self:add_opcode("pop", diff)
     end
 end
 
@@ -255,11 +389,9 @@ function Compiler:generate_code_from_assignment(assignment)
     if assignment.target.tag == "variable" then
         local local_index = self:find_local(assignment.target.variable_name)
         if local_index then
-            self:add_opcode("store_local")
-            self:add_opcode(local_index)
+            self:add_opcode("store_local", local_index)
         else
-            self:add_opcode("store")
-            self:add_opcode(self:global_variable_index_from_name(assignment.target.variable_name))
+            self:add_opcode("store", self:global_variable_index_from_name(assignment.target.variable_name))
         end
     elseif assignment.target.tag == "indexed" then
         self:generate_code_from_expression(assignment.target.variable)
@@ -271,18 +403,18 @@ function Compiler:generate_code_from_assignment(assignment)
 end
 
 function Compiler:generate_code_from_statement(statement)
+    self:type_check_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
     elseif statement.tag == "local_variable" then
         local default_initial_value = (statement.is_optional) and ast._null() or ast._number(0) 
         self:generate_code_from_expression(statement.initial_value or default_initial_value)
-        self.locals[#self.locals + 1] = statement.name
+        self.locals[#self.locals + 1] = { name = statement.name, is_optional = statement.is_optional }
     elseif statement.tag == "block" then
         self:generate_code_from_block(statement)
     elseif statement.tag == "call" then
         self:generate_code_from_call(statement)
-        self:add_opcode("pop")
-        self:add_opcode(1)
+        self:add_opcode("pop", 1)
     elseif statement.tag == "sequence" then
         self:generate_code_from_statement(statement.first)
         self:generate_code_from_statement(statement.second)
@@ -307,8 +439,7 @@ function Compiler:generate_code_from_statement(statement)
         self:point_jump_to_here(jump)
     elseif statement.tag == "return" then
         self:generate_code_from_expression(statement.expression)
-        self:add_opcode("ret")
-        self:add_opcode(#self.locals + #self.parameters.formal)
+        self:add_opcode("ret", #self.locals + #self.parameters.formal)
     elseif statement.tag == "print" then
         self:generate_code_from_expression(statement.expression)
         self:add_opcode("print")

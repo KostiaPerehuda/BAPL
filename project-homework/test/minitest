@@ -37,7 +37,7 @@ function test3(a, b, c);
 # logical operators
 function test3 (a, b, c) {
   var x = a and b;
-  x = x + (a or undef + 1);   # short circuit avoids the error
+  x = x + (a or (undef?|0) + 1);   # short circuit avoids the error
   x = x + (a and 2 * a or 30);   # check priorities
   x = x + (!!0 and 200 or 2 * 100 + 100);
   return x - c
@@ -54,16 +54,16 @@ function test4 () {
 
   i = 1; while i <= 10 { a[i] = new [10]; i = i + 1 };
   a[1][7] = 14; a[7][2] = -23; a[4][2] = a;
-  nresults = nresults + 1;
-  results[nresults] = a[4][2][4][2][10 - 9][2*3 + 1] +
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = a[4][2][4][2][10 - 9][2*3 + 1] +
                       a[7 or 23][1 and 2] - sum + 394;
 
   a = new [2][2][3];
   i = 1;
   while i <= 2 {
-    j = 1;
+    var j = 1;
     while j <= 2 {
-      k = 1;
+      var k = 1;
       while k <= 3 {
         a[i][j][k] = 0;
         k = k + 1
@@ -114,30 +114,30 @@ function main () {
   results = new [20];
   nresults = 0;
 
-  nresults = nresults + 1;
-  results[nresults] = test1();
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = test1();
 
-  nresults = nresults + 1;
-  results[nresults] = test2();
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = test2();
 
 
-  nresults = nresults + 1;
-  results[nresults] = test3(10, 20, 350);
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = test3(10, 20, 350);
 
   var a = test4();
-  nresults = nresults + 1;
-  results[nresults] = a;
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = a;
 
-  nresults = nresults + 1;
-  results[nresults] = fact(6) - 720;
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = fact(6) - 720;
 
   var res = test5(10, 20) - test5(10, 20, 10 * 20);
-  nresults = nresults + 1;
-  results[nresults] = res;
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = res;
 
   var ternary = test6();
-  nresults = nresults + 1;
-  results[nresults] = ternary;
+  nresults = (nresults?|0) + 1;
+  results[nresults?|0] = ternary;
 
   @results;
 
@@ -147,8 +147,8 @@ function main () {
 
 # control structures
 function test2 () {
-  i = 1;
-  sum = 0;
+  var i = 1;
+  var sum = 0;
   while i <= 4 {
     if i % 2 == 1 {
       sum = sum + i;
