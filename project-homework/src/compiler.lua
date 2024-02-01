@@ -281,6 +281,9 @@ function Compiler:is_of_optional_type(expression)
         end
         return false
     elseif expression.tag == "is_present_operator" then
+        if not self:is_of_optional_type(expression.operand) then
+            error("Type Error: Is Present Operator cannot accept non-optional type as its operand! In " .. pt(expression))
+        end
         return false
     elseif expression.tag == "or_else_operator" then
         if not self:is_of_optional_type(expression.left_operand) then
