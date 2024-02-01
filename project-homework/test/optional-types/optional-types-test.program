@@ -1,6 +1,8 @@
 function main() {
     @(optional_type_declarations());   # should print 1
-    @(null_keyword())                  # should print 1
+    @(null_keyword());                 # should print 1
+    @(is_present_operator());          # should print 1
+    @(or_else_operator());             # should print 1
 }
 
 #{
@@ -41,17 +43,41 @@ function null_keyword() {
 #{
     operator '??' a.k.a 'is present':
         Syntax: "<expression> ??"
+        Cannot be chained! ('<expression> ?? ??' is illegal)
 
     Returns 1 if <expression> is not null and 0 if it is null
 
-    The operator has the presedence hisher of exponent but less than atom, because its intention is
+    The operator has the presedence higher of exponent but less than atom, because its intention is
         to eliminate the propagation of 'null's though the expression.
 #} 
 
 function is_present_operator() {
+    # Should not compile (uncomment to verify)
+    # return empty ?? ??;
+
     # Should return 1
     var? empty;
     var? not_empty = 2;
     return empty?? == 0 and not_empty?? == 1;
 }
 
+#{
+    operator '?|' a.k.a 'or else':
+        Syntax: "<expression1> ?| <expression2>"
+        Right-associative.
+        Can be chained.
+
+    Returns <expression1> if <expression1> is not null, otherwise returns <expression2>
+        
+    The syntax is inspired by '?' representing 'if' and '|' representing 'or'
+
+    The operator has priority lower than that of '??' operator but .
+#} 
+
+function or_else_operator() {
+    # Should return 1
+    var? empty0;
+    var? empty1;
+    var? empty2 = 2;
+    return empty0 ?| 2 == empty0 ?| empty1 ?| empty2;
+}

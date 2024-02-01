@@ -183,9 +183,13 @@ function Compiler:generate_code_from_expression(expression)
         self:generate_code_from_expression(expression.falsy_expression)
 
         self:point_jump_to_here(jump_to_end)
-    elseif expression.tag == "is_present" then
+    elseif expression.tag == "is_present_operator" then
         self:generate_code_from_expression(
             ast._ternary_operator(expression.operand, ast._number(1), ast._number(0))
+        )
+    elseif expression.tag == "or_else_operator" then
+        self:generate_code_from_expression(
+            ast._ternary_operator(expression.left_operand, expression.left_operand, expression.right_operand)
         )
     else
         error("invalid expression tree: " .. pt(expression))

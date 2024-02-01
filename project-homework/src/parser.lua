@@ -15,7 +15,7 @@ end
 
 local longest_match = 0
 
-local longest_match_tracker = lpeg.P(function(_,position)
+local longest_match_tracker = lpeg.P(function(input,position)
         longest_match = math.max(longest_match, position)
     return true
 end)
@@ -124,7 +124,9 @@ local  comparison = lpeg.V"comparison"
 local     sum     = lpeg.V"sum"
 local     term    = lpeg.V"term"
 local   negation  = lpeg.V"negation"
-local is_present  = lpeg.V"is_present"
+local null_operators = lpeg.V"null_operators"
+local  is_present = lpeg.V"is_present"
+local   or_else   = lpeg.V"or_else"
 local   exponent  = lpeg.V"exponent"
 local     atom    = lpeg.V"atom"
 local indexed_var = lpeg.V"indexed_var"
@@ -133,8 +135,9 @@ local function_call = lpeg.V"function_call"
 local arguments = lpeg.V"arguments"
 
 local expression = lpeg.P{"expression", expression = ternary_operator + RW"null",
-    ternary_operator =  (logical_or * T"?" * ternary_operator * T":" * ternary_operator / ast._ternary_operator)
-                        + logical_or,
+    ternary_operator =  (logical_or * (T"?" - (T"??" + T"?|"))
+                            * ternary_operator * T":" * ternary_operator
+                            / ast._ternary_operator) + logical_or,
 
      logical_or = lpeg.Ct(logical_and * (RW"or" * logical_and)^0) / fold_left_into_logical("or"),
     logical_and = lpeg.Ct( comparison * (RW"and" * comparison)^0) / fold_left_into_logical("and"),
@@ -142,8 +145,11 @@ local expression = lpeg.P{"expression", expression = ternary_operator + RW"null"
         sum     = lpeg.Ct(  term   * (   additive_operator    *   term  )^0) / fold_left_into_binop_tree,
         term    = lpeg.Ct(negation * (multiplicative_operator * negation)^0) / fold_left_into_binop_tree,
       negation  = (negation_operator * negation / ast._unary_operator) + exponent,
-      exponent  = lpeg.Ct(is_present * (  exponential_operator  *   is_present  )^0) / fold_right_into_binop_tree,
-     is_present = (atom * T"??" / ast._is_present) + atom,
+      exponent  = lpeg.Ct(null_operators * (exponential_operator * null_operators)^0) / fold_right_into_binop_tree,
+
+    null_operators = is_present + or_else + atom,
+     is_present = atom * T"??" / ast._is_present_operator,
+       or_else  = atom * T"?|" * null_operators / ast._or_else_operator,
 
         atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var,
 
