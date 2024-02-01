@@ -151,7 +151,7 @@ local expression = lpeg.P{"expression", expression = ternary_operator + null,
 
     null_operators = is_present + or_else + atom,
      is_present = atom * T"??" / ast._is_present_operator,
-       or_else  = atom * T"?|" * null_operators / ast._or_else_operator,
+       or_else  = atom * T"?|" * expression / ast._or_else_operator,
 
         atom    = (T"(" * expression * T")") + number + new_array + function_call + indexed_var,
 
@@ -204,7 +204,6 @@ local statement    = lpeg.V"statement"
 local if_statement = lpeg.V"if_statement"
 local while_statement = lpeg.V"while_statement"
 local function_header = lpeg.V"function_header"
-local function_decl = lpeg.V"function_decl"
 local function_def = lpeg.V"function_def"
 local call_statement = lpeg.V"call_statement"
 local function_params = lpeg.V"function_params"
@@ -216,12 +215,11 @@ local function_params = lpeg.V"function_params"
 --       local variables and stack frames.
 local program = lpeg.P{"functions",
 
-    functions = lpeg.Ct((function_decl + function_def)^0),
+    functions = lpeg.Ct((function_def)^0),
 
-    function_decl = (function_header * T";") / ast._function,
-    function_def = (function_header * block) / ast._function,
+    function_def = (function_header * (T";" + block)) / ast._function,
 
-    function_header = RW"function" * identifier * T"(" * function_params * T")",
+    function_header = RW"function" * identifier * T"(" * function_params * T")" * optional_declarator,
     function_params = ((lpeg.Ct(identifier * (T"," * identifier)^0) * (T"=" * expression)^-1) + lpeg.Cc({}))
                         / ast._parameters,
 

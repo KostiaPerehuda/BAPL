@@ -3,6 +3,7 @@ function main() {
     @(null_keyword());                 # should print 1
     @(is_present_operator());          # should print 1
     @(or_else_operator());             # should print 1
+    @(optional_functions());           # should print 1
 }
 
 #{
@@ -78,4 +79,17 @@ function or_else_operator() {
     var? empty1;
     var? empty2 = 2;
     return empty0 ?| 1 == empty0 ?| empty1 ?| empty2??;
+}
+
+#{
+    optional functions;
+#} 
+
+function optional_functions() {
+    # Should return 1
+    return optional() ?| -1;
+}
+
+function optional()? {
+    return 1;
 }

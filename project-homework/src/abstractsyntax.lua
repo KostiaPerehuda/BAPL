@@ -64,7 +64,7 @@ return {
     _if = node("if", "condition", "if_branch", "else_branch"),
     _while = node("while", "condition", "loop_body"),
 
-    _function = node("function", "name", "parameters", "body"),
+    _function = node("function", "name", "parameters", "returns_optional", "body"),
     _parameters = node("parameters", "formal", "default"),
     
     _call = node("call", "call_site_name", "arguments"),

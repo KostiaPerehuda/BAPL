@@ -211,20 +211,30 @@ function Compiler:generate_code_from_expression(expression)
 end
 
 
+function Compiler:type_check_call(call_node)
+    for i, argument in ipairs(call_node.arguments) do
+        if self:is_of_optional_type(argument) then
+            error("Type Error: Function Calls cannot accept arguments of optional type! "
+            .. "Rule violated by argument number '" .. i .. "'! In " .. pt(call_node))
+        end
+    end
+
+    local call_site, _ = self:resolve_call(call_node)
+    if not call_site then
+        error("Compilation Error: cannot resolve function call to " .. create_pretty_call_site_name(call_node))
+    end
+
+    return call_site.returns_optional
+end
+
+
 function Compiler:is_of_optional_type(expression)
     if expression.tag == "number" then
         return false
     elseif expression.tag == "null" then
         return true
     elseif expression.tag == "call" then
-        for i, argument in ipairs(expression.arguments) do
-            if self:is_of_optional_type(argument) then
-                error("Type Error: Function Calls cannot accept arguments of optional type! "
-                .. "Rule violated by argument number '" .. i .. "'! In " .. pt(expression))
-            end
-        end
-        -- TODO: allow optional function returns?
-        return false
+        return self:type_check_call(expression)
     elseif expression.tag == "variable" then 
         local local_index, is_optional = self:find_local(expression.variable_name)
         if local_index then
@@ -273,8 +283,11 @@ function Compiler:is_of_optional_type(expression)
     elseif expression.tag == "is_present_operator" then
         return false
     elseif expression.tag == "or_else_operator" then
+        if not self:is_of_optional_type(expression.left_operand) then
+            error("Type Error: Or Else Operator cannot accept non-optional type as its left operand! In " .. pt(expression))
+        end
         if self:is_of_optional_type(expression.right_operand) then
-            error("Type Error: Or Else Operator cannot accept optional type as its second operand! In " .. pt(expression))
+            error("Type Error: Or Else Operator cannot accept optional type as its right operand! In " .. pt(expression))
         end
         return false
     else
@@ -340,12 +353,7 @@ function Compiler:type_check_statement(statement)
     elseif statement.tag == "block" then
         -- do not type check children because it will be done when generating code for them
     elseif statement.tag == "call" then
-        for i, argument in ipairs(statement.arguments) do
-            if self:is_of_optional_type(argument) then
-                error("Type Error: Function Calls cannot accept arguments of optional type! "
-                .. "Rule violated by argument number '" .. i .. "'! In " .. pt(statement))
-            end
-        end
+        self:type_check_call(statement)
     elseif statement.tag == "sequence" then
         -- do not type check children because it will be done when generating code for them
     elseif statement.tag == "if" then
@@ -359,8 +367,9 @@ function Compiler:type_check_statement(statement)
                 error("Type Error: While Statement cannot accept condition of optional type! " .. pt(statement.condition))
         end
     elseif statement.tag == "return" then
-        if self:is_of_optional_type(statement.expression) then
-            error("Type Error: Return Statement cannot accept expression of optional type! " .. pt(statement))
+        if not self.current_function_returns_optional and self:is_of_optional_type(statement.expression) then
+            error("Type Error: Cannot Return an expression of optional type! Because function '"
+                .. self.current_function_name .. "' has not declared optional return! In" .. pt(statement))
         end
     elseif statement.tag == "print" then
         -- always valid
@@ -464,6 +473,10 @@ local function default_parameter_redefinition_happened(old_function_decalaration
         and (new_function_decalaration.parameters.default ~= old_function_decalaration.parameters.default)
 end
 
+local function return_type_conflict_present(old_function_decalaration, new_function_decalaration)
+    return old_function_decalaration.returns_optional ~= new_function_decalaration.returns_optional
+end
+
 
 function Compiler:declare_function(function_node)
     local name = create_pretty_function_node_name(function_node)
@@ -490,6 +503,15 @@ function Compiler:declare_function(function_node)
             self.functions[signature].parameters.default = function_node.parameters.default
         end
 
+        if return_type_conflict_present(self.functions[signature], function_node) then
+            error("Compilation Error: Function " .. name .. " has already been declared with a different return type!"
+                .. " Please make sure that return type is consistenet between all declarations!")
+        end
+
+        if function_node.parameters.default then
+            self.functions[signature].parameters.default = function_node.parameters.default
+        end
+
         return self.functions[signature]
     end
 
@@ -503,7 +525,8 @@ function Compiler:declare_function(function_node)
         parameters = {
             count = #formal_parameters,
             default = function_node.parameters.default,
-        }
+        },
+        returns_optional = function_node.returns_optional,
     }
 
     return self.functions[signature]
@@ -523,8 +546,11 @@ function Compiler:compile_function(function_node)
     self.code = call_site.code
     self.parameters = function_node.parameters
     self.current_function_name = call_site.name
+    self.current_function_returns_optional = call_site.returns_optional
+
     self:generate_code_from_statement(function_node.body)
-    self:generate_code_from_statement(ast._return(ast._number(0)))
+    local default_return_value = call_site.returns_optional and ast._null() or ast._number(0)
+    self:generate_code_from_statement(ast._return(default_return_value))
 end
 
 local function compile(ast, log_level)
