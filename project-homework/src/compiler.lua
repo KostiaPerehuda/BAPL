@@ -274,7 +274,8 @@ function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
     elseif statement.tag == "local_variable" then
-        self:generate_code_from_expression(statement.initial_value or ast._null())
+        local default_initial_value = (statement.is_optional) and ast._null() or ast._number(0) 
+        self:generate_code_from_expression(statement.initial_value or default_initial_value)
         self.locals[#self.locals + 1] = statement.name
     elseif statement.tag == "block" then
         self:generate_code_from_block(statement)

@@ -94,21 +94,27 @@ local function call(call_site, memory, stack, log_level, cycle)
             pc = pc + 1
             pc = pc + code[pc]
         elseif current_instruction == "jump_if_zero" then
+            local operand = stack:pop()
+            assert(operand ~= "null", "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             pc = pc + 1
-            pc = pc + ((stack:pop() == 0) and code[pc] or 0)
+            pc = pc + ((operand == 0) and code[pc] or 0)
         elseif current_instruction == "jump_if_null" then
             pc = pc + 1
             pc = pc + ((stack:pop() == "null") and code[pc] or 0)
         elseif current_instruction == "jump_if_zero_or_pop" then
+            local operand = stack:peek()
+            assert(operand ~= "null", "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             pc = pc + 1
-            if stack:peek() == 0 then
+            if operand == 0 then
                 pc = pc + code[pc]
             else
                 stack:drop()
             end
         elseif current_instruction == "jump_if_not_zero_or_pop" then
+            local operand = stack:peek()
+            assert(operand ~= "null", "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             pc = pc + 1
-            if stack:peek() ~= 0 then
+            if operand ~= 0 then
                 pc = pc + code[pc]
             else
                 stack:drop()
@@ -159,45 +165,75 @@ local function call(call_site, memory, stack, log_level, cycle)
             Array.put(array, index, value)
         elseif current_instruction == "eq" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((left == right) and 1 or 0)
         elseif current_instruction == "neq" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((left ~= right) and 1 or 0)
         elseif current_instruction == "lte" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((left <= right) and 1 or 0)
         elseif current_instruction == "gte" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((left >= right) and 1 or 0)
         elseif current_instruction == "lt" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((left < right) and 1 or 0)
         elseif current_instruction == "gt" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((left > right) and 1 or 0)
         elseif current_instruction == "not" then
             local operand = stack:pop()
+            assert(operand ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push((operand == 0) and 1 or 0)
         elseif current_instruction == "add" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push(left + right)
         elseif current_instruction == "sub" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push(left - right)
         elseif current_instruction == "mul" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push(left * right)
         elseif current_instruction == "div" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
+            assert(right ~= 0, "Runtime Error: division by zero")
             stack:push(left / right)
         elseif current_instruction == "mod" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push(left % right)
         elseif current_instruction == "exp" then
             local left, right = stack:pop(2)
+            assert(left ~= "null" and right ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
             stack:push(left ^ right)
         elseif current_instruction == "negate" then
-            stack:push(-stack:pop())
+            local operand = stack:pop()
+            assert(operand ~= "null",
+                "Runtime Error: '"..current_instruction.."' is incompatible with operands of type 'null'")
+            stack:push(-operand)
         else
             error("unknown instruction: '" .. current_instruction .. "'")
         end
