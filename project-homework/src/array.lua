@@ -71,6 +71,8 @@ end
 
 
 function Array:put(index, value)
+    assert(value ~= "null",
+                "Array Access Error: cannot store value of type 'null' in an array!")
     verify_array_type_and_index_bounds(self, index)
     self[index] = value
 end
