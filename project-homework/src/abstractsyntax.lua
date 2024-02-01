@@ -46,7 +46,7 @@ return {
     _indexed = node("indexed", "variable", "index"),
 
     
-    _local_variable = node("local_variable", "name", "initial_value"),
+    _local_variable = node("local_variable", "is_optional", "name", "initial_value"),
     _assignment = node("assignment", "target", "expression"),
 
     _return = node("return", "expression"),

@@ -1,0 +1,16 @@
+function main() {
+    @(optional_type_declarations() == 1);   # should print 1
+}
+
+#{
+    optional type declarations:
+        Syntax (with default initialization to null):   "var? <identifier>"
+        Syntax (with explicit initialization):          "var? <identifier> = <expression>"
+#} 
+
+function optional_type_declarations() {
+    var? empty0;
+    var? empty1 = 1;
+    return empty1;
+}
+

@@ -164,7 +164,8 @@ local expression = lpeg.P{"expression", expression = ternary_operator,
 }
 
 ------------------------- Local Variable Declarations --------------------------
-local local_var = RW"var" * identifier * (T"=" * expression)^-1 / ast._local_variable
+local optional_declarator = (T"?" * lpeg.Cc(true)) + lpeg.Cc(false)
+local local_var = RW"var" * optional_declarator * identifier * (T"=" * expression)^-1 / ast._local_variable
 
 ---------------------------------- Assignment ----------------------------------
 local assignment_target = lpeg.Ct(variable * (T"[" * expression * T"]")^0) / fold_left_into_indexed_node
