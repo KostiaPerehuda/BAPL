@@ -36,6 +36,8 @@ return {
     _number   = number_node,
     _variable = node("variable", "variable_name"),
 
+    _null = node("null"),
+
     _unary_operator   = node("unary_operator", "operator", "operand"),
     _binary_operator  = node("binop", "left_operand", "operator", "right_operand"),
     _logical_operator = node("logical_operator", "left_operand", "operator", "right_operand"),

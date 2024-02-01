@@ -96,6 +96,9 @@ local function call(call_site, memory, stack, log_level, cycle)
         elseif current_instruction == "jump_if_zero" then
             pc = pc + 1
             pc = pc + ((stack:pop() == 0) and code[pc] or 0)
+        elseif current_instruction == "jump_if_null" then
+            pc = pc + 1
+            pc = pc + ((stack:pop() == "null") and code[pc] or 0)
         elseif current_instruction == "jump_if_zero_or_pop" then
             pc = pc + 1
             if stack:peek() == 0 then
@@ -106,6 +109,13 @@ local function call(call_site, memory, stack, log_level, cycle)
         elseif current_instruction == "jump_if_not_zero_or_pop" then
             pc = pc + 1
             if stack:peek() ~= 0 then
+                pc = pc + code[pc]
+            else
+                stack:drop()
+            end
+        elseif current_instruction == "jump_if_not_null_or_pop" then
+            pc = pc + 1
+            if stack:peek() ~= "null" then
                 pc = pc + code[pc]
             else
                 stack:drop()
@@ -127,8 +137,9 @@ local function call(call_site, memory, stack, log_level, cycle)
             --      BUT, if we separate out compilation and execution stages later on, we will still need
             --           to verify this at runtime.
             -- UPDATE: with introduction of the functions and branches, this check has to live at run-time only
-            local value = memory[code[pc]]
+            -- UPDATE: assertion not neccessary as null is a valid value now
             -- assert(value ~= nil, "Runtime Error: Attempt to reference uninitialized variable '" .. code[pc] .. "'!")
+            local value = memory[code[pc]] or "null"
             stack:push(value)
         elseif code[pc] == "store_local" then
             pc = pc + 1
@@ -193,7 +204,8 @@ local function call(call_site, memory, stack, log_level, cycle)
 
         -- can only have numbers or arrays on the stack or nil
         assert(stack:size() == 0 or stack:size() > 0
-            and (stack:peek() == nil or type(stack:peek()) == "number" or type(stack:peek()) == "table"))
+            and (stack:peek() == "null" or type(stack:peek()) == "number" or type(stack:peek()) == "table"),
+            "Corrupted Stack: " .. tostring(stack))
 
         pc = pc + 1
         cycle = cycle + 1

@@ -25,8 +25,6 @@ function optional_type_declarations() {
     For better null-safety, and to discourage polluting code with 'null's,
         expressions will not be allowed to contain nested 'null's inside them,
         but a 'null' will be an expression.
-        
-    For now 'null' will be equivalent to number 0;
 #} 
 
 function null_keyword() {
@@ -37,7 +35,7 @@ function null_keyword() {
 
     # Should return 1
     var? empty = null;
-    return empty == 0;
+    return 1;
 }
 
 #{

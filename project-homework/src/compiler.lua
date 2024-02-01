@@ -87,6 +87,14 @@ function Compiler:generate_jump_if_zero()
     return self:generate_jump("jump_if_zero")
 end
 
+function Compiler:generate_jump_if_null()
+    return self:generate_jump("jump_if_null")
+end
+
+function Compiler:generate_jump_if_not_null_or_pop()
+    return self:generate_jump("jump_if_not_null_or_pop")
+end
+
 function Compiler:point_jump_to(jump, position)
     self.code[jump] = position - jump
 end
@@ -137,6 +145,9 @@ function Compiler:generate_code_from_expression(expression)
     if expression.tag == "number" then
         self:add_opcode("push")
         self:add_opcode(expression.number_value)
+    elseif expression.tag == "null" then
+        self:add_opcode("push")
+        self:add_opcode("null")
     elseif expression.tag == "call" then
         self:generate_code_from_call(expression)
     elseif expression.tag == "variable" then
@@ -184,13 +195,21 @@ function Compiler:generate_code_from_expression(expression)
 
         self:point_jump_to_here(jump_to_end)
     elseif expression.tag == "is_present_operator" then
-        self:generate_code_from_expression(
-            ast._ternary_operator(expression.operand, ast._number(1), ast._number(0))
-        )
+        self:generate_code_from_expression(expression.operand)
+        local jump_to_false = self:generate_jump_if_null()
+
+        self:generate_code_from_expression(ast._number(1))
+        local jump_to_end = self:generate_jump()
+
+        self:point_jump_to_here(jump_to_false)
+        self:generate_code_from_expression(ast._number(0))
+
+        self:point_jump_to_here(jump_to_end)
     elseif expression.tag == "or_else_operator" then
-        self:generate_code_from_expression(
-            ast._ternary_operator(expression.left_operand, expression.left_operand, expression.right_operand)
-        )
+        self:generate_code_from_expression(expression.left_operand)
+        local jump = self:generate_jump_if_not_null_or_pop()
+        self:generate_code_from_expression(expression.right_operand)
+        self:point_jump_to_here(jump)
     else
         error("invalid expression tree: " .. pt(expression))
     end
@@ -255,7 +274,7 @@ function Compiler:generate_code_from_statement(statement)
     if statement.tag == "assignment" then
         self:generate_code_from_assignment(statement)
     elseif statement.tag == "local_variable" then
-        self:generate_code_from_expression(statement.initial_value or ast._number(0))
+        self:generate_code_from_expression(statement.initial_value or ast._null())
         self.locals[#self.locals + 1] = statement.name
     elseif statement.tag == "block" then
         self:generate_code_from_block(statement)
